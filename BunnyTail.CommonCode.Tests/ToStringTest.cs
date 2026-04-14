@@ -26,4 +26,12 @@ public class ToStringTest
             "{ Value = null }",
             new GenericData<string?> { Value = null }.ToString());
     }
+
+    [Fact]
+    public void TestInnerClass()
+    {
+        Assert.Equal(
+            "{ Id = 456, Name = inner }",
+            new OuterData.InnerData { Id = 456, Name = "inner" }.ToString());
+    }
 }
