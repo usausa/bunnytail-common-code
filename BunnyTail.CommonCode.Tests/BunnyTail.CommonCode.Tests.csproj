@@ -17,10 +17,6 @@
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
   <PropertyGroup>
     <CommonCodeGeneratorToStringOutputClassName>false</CommonCodeGeneratorToStringOutputClassName>
     <CommonCodeGeneratorToStringNullLiteral>null</CommonCodeGeneratorToStringNullLiteral>
