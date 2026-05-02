@@ -272,14 +272,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 
                 BuildAppendLiteral(builder, "[");
 
-                BuildAppendJoinedLiteral(
-                    builder,
-                    property.Name,
-                    property.IsNullAssignable
-                        ? !String.IsNullOrEmpty(options.NullLiteral)
-                            ? $"static x => x?.ToString() ?? \"{options.NullLiteral}\""
-                            : "static x => x?.ToString()"
-                        : "static x => x.ToString()");
+                BuildAppendJoinedFormatted(builder, property.Name, property.IsNullAssignable, options.NullLiteral);
 
                 BuildAppendLiteral(builder, "]");
 
@@ -378,16 +371,43 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             .NewLine();
     }
 
-    private static void BuildAppendJoinedLiteral(SourceBuilder builder, string name, string expression)
+    private static void BuildAppendJoinedFormatted(SourceBuilder builder, string name, bool isNullAssignable, string? nullLiteral)
     {
         builder
             .Indent()
-            .Append("handler.AppendLiteral(String.Join(\", \", System.Linq.Enumerable.Select(this.")
-            .Append(name)
-            .Append(", ")
-            .Append(expression)
-            .Append(")));")
+            .Append("var firstItem = true;")
             .NewLine();
+        builder
+            .Indent()
+            .Append("foreach (var item in this.")
+            .Append(name)
+            .Append(")")
+            .NewLine();
+        builder.BeginScope();
+
+        builder
+            .Indent()
+            .Append("if (firstItem) { firstItem = false; } else { handler.AppendLiteral(\", \"); }")
+            .NewLine();
+
+        if (isNullAssignable && !String.IsNullOrEmpty(nullLiteral))
+        {
+            builder
+                .Indent()
+                .Append("if (item is not null) { handler.AppendFormatted(item); } else { handler.AppendLiteral(\"")
+                .Append(nullLiteral!)
+                .Append("\"); }")
+                .NewLine();
+        }
+        else
+        {
+            builder
+                .Indent()
+                .Append("handler.AppendFormatted(item);")
+                .NewLine();
+        }
+
+        builder.EndScope();
     }
 
     // ------------------------------------------------------------
