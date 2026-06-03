@@ -4,18 +4,18 @@ using Microsoft.CodeAnalysis;
 
 internal static class Diagnostics
 {
-    // ToString
+    // ToString (01xx)
     public static DiagnosticDescriptor InvalidTypeDefinition { get; } = new(
-        id: "BTCC0001",
+        id: "BTCC0101",
         title: "Invalid type definition",
         messageFormat: "Type must be partial. type=[{0}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
-    // Equality
+    // Equality (02xx)
     public static DiagnosticDescriptor EqualityInvalidTypeDefinition { get; } = new(
-        id: "BTCC0101",
+        id: "BTCC0201",
         title: "Invalid type definition for GenerateEquality",
         messageFormat: "Type must be partial. type=[{0}]",
         category: "Usage",
@@ -23,16 +23,16 @@ internal static class Diagnostics
         isEnabledByDefault: true);
 
     public static DiagnosticDescriptor EqualityNoProperties { get; } = new(
-        id: "BTCC0102",
+        id: "BTCC0202",
         title: "No equality properties found",
         messageFormat: "No public properties found for equality comparison. type=[{0}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
-    // DeepClone
+    // DeepClone (03xx)
     public static DiagnosticDescriptor DeepCloneInvalidTypeDefinition { get; } = new(
-        id: "BTCC0201",
+        id: "BTCC0301",
         title: "Invalid type definition for GenerateDeepClone",
         messageFormat: "Type must be partial. type=[{0}]",
         category: "Usage",
@@ -40,7 +40,7 @@ internal static class Diagnostics
         isEnabledByDefault: true);
 
     public static DiagnosticDescriptor DeepCloneNotImplementIDeepCloneable { get; } = new(
-        id: "BTCC0202",
+        id: "BTCC0302",
         title: "Type does not implement IDeepCloneable",
         messageFormat: "Type must implement IDeepCloneable<T> to use [GenerateDeepClone]. type=[{0}]",
         category: "Usage",
@@ -48,16 +48,16 @@ internal static class Diagnostics
         isEnabledByDefault: true);
 
     public static DiagnosticDescriptor DeepClonePropertyMissingDeepClone { get; } = new(
-        id: "BTCC0203",
+        id: "BTCC0303",
         title: "Property type does not support deep clone",
         messageFormat: "Property type does not implement IDeepCloneable<T>. Use [IgnoreClone] to suppress this warning. property=[{0}], type=[{1}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
-    // DelegateTo
+    // DelegateTo (04xx)
     public static DiagnosticDescriptor DelegateToInvalidTypeDefinition { get; } = new(
-        id: "BTCC0301",
+        id: "BTCC0401",
         title: "Invalid type definition for GenerateDelegateTo",
         messageFormat: "Type must be partial. type=[{0}]",
         category: "Usage",
@@ -65,7 +65,7 @@ internal static class Diagnostics
         isEnabledByDefault: true);
 
     public static DiagnosticDescriptor DelegateToNoDelegateField { get; } = new(
-        id: "BTCC0302",
+        id: "BTCC0402",
         title: "No [DelegateTo] field or property found",
         messageFormat: "No field or property with [DelegateTo] attribute found. type=[{0}]",
         category: "Usage",
@@ -73,16 +73,16 @@ internal static class Diagnostics
         isEnabledByDefault: true);
 
     public static DiagnosticDescriptor DelegateToInvalidInterfaceType { get; } = new(
-        id: "BTCC0303",
+        id: "BTCC0403",
         title: "Invalid InterfaceType for [DelegateTo]",
         messageFormat: "InterfaceType must be an interface implemented by the delegate member type. member=[{0}], interfaceType=[{1}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
-    // CompareTo
+    // CompareTo (05xx)
     public static DiagnosticDescriptor CompareToInvalidTypeDefinition { get; } = new(
-        id: "BTCC0401",
+        id: "BTCC0501",
         title: "Invalid type definition for GenerateCompareTo",
         messageFormat: "Type must be partial. type=[{0}]",
         category: "Usage",
@@ -90,7 +90,7 @@ internal static class Diagnostics
         isEnabledByDefault: true);
 
     public static DiagnosticDescriptor CompareToNoKeys { get; } = new(
-        id: "BTCC0402",
+        id: "BTCC0502",
         title: "No [CompareKey] properties found",
         messageFormat: "No properties with [CompareKey] attribute found. type=[{0}]",
         category: "Usage",

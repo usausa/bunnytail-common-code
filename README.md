@@ -41,6 +41,12 @@ var str = data.ToString();
 Assert.Equal("{ Id = 123, Name = xyz, Values = [1, 2] }", str);
 ```
 
+### Diagnostics
+
+| ID | Severity | Description |
+|---|---|---|
+| BTCC0101 | Warning | Type must be partial |
+
 ---
 
 ## Equality
@@ -90,8 +96,8 @@ Assert.True(a.Equals(b)); // UpdatedAt is ignored
 
 | ID | Severity | Description |
 |---|---|---|
-| BTTS0101 | Warning | Type must be partial |
-| BTTS0102 | Warning | No public properties found for equality comparison |
+| BTCC0201 | Warning | Type must be partial |
+| BTCC0202 | Warning | No public properties found for equality comparison |
 
 ---
 
@@ -133,8 +139,8 @@ Assert.True(a < b);
 
 | ID | Severity | Description |
 |---|---|---|
-| BTTS0401 | Warning | Type must be partial |
-| BTTS0402 | Warning | No `[CompareKey]` properties found |
+| BTCC0501 | Warning | Type must be partial |
+| BTCC0502 | Warning | No `[CompareKey]` properties found |
 
 ---
 
@@ -190,9 +196,9 @@ Assert.Equal(2, doc.Tags.Count);  // original unchanged
 
 | ID | Severity | Description |
 |---|---|---|
-| BTTS0201 | Warning | Type must be partial |
-| BTTS0202 | Warning | Type must implement `IDeepCloneable<T>` |
-| BTTS0203 | Warning | Property type does not support deep clone; use `[ShallowClone]` to suppress |
+| BTCC0301 | Warning | Type must be partial |
+| BTCC0302 | Warning | Type must implement `IDeepCloneable<T>` |
+| BTCC0303 | Warning | Property type does not support deep clone; use `[ShallowClone]` to suppress |
 
 ---
 
@@ -232,32 +238,7 @@ The generator will not emit a member if the containing type already defines it, 
 
 | ID | Severity | Description |
 |---|---|---|
-| BTTS0301 | Warning | Type must be partial |
-| BTTS0302 | Warning | No `[DelegateTo]` field or property found |
-
-
-### Source
-
-```csharp
-[GenerateToString]
-public partial class Data
-{
-    public int Id { get; set; }
-
-    public string Name { get; set; } = default!;
-
-    public int[] Values { get; set; } = default!;
-
-    [IgnoreToString]
-    public int Ignore { get; set; }
-}
-```
-
-### Result
-
-```csharp
-var data = new Data { Id = 123, Name = "xyz", Values = [1, 2] };
-var str = data.ToString();
-Assert.Equal("{ Id = 123, Name = xyz, Values = [1, 2] }", str);
-```
+| BTCC0401 | Warning | Type must be partial |
+| BTCC0402 | Warning | No `[DelegateTo]` field or property found |
+| BTCC0403 | Warning | `InterfaceType` must be an interface implemented by the delegate member type |
 
