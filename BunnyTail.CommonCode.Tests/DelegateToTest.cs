@@ -23,6 +23,41 @@ public sealed class DelegateToSimpleServiceCore : IDelegateToSimpleService
     public void Reset() => Count = 0;
 }
 
+public interface IDelegateToReader
+{
+    string Read();
+}
+
+public interface IDelegateToWriter
+{
+    void Write(string value);
+}
+
+public sealed class DelegateToStorageCore : IDelegateToReader, IDelegateToWriter
+{
+    private string content = string.Empty;
+
+    public string Read() => this.content;
+
+    public void Write(string value) => this.content = value;
+}
+
+// 委譲元クラス自身はインターフェースを実装していない (メンバ型が実装するインターフェース経由で解決されることを検証)
+[GenerateDelegateTo]
+public partial class DelegateToStorageFacade
+{
+    [DelegateTo]
+    private readonly DelegateToStorageCore core = new();
+}
+
+// InterfaceType で委譲対象を限定するケース
+[GenerateDelegateTo]
+public partial class DelegateToReaderFacade
+{
+    [DelegateTo(InterfaceType = typeof(IDelegateToReader))]
+    private readonly DelegateToStorageCore core = new();
+}
+
 public class DelegateToTest
 {
     [Fact]
@@ -54,5 +89,21 @@ public class DelegateToTest
         Assert.Equal("Hello-3", svc.GetMessage());
         svc.Reset();
         Assert.Equal(0, svc.Count);
+    }
+
+    [Fact]
+    public void WhenConcreteFieldThenDelegatesAllImplementedInterfaces()
+    {
+        var facade = new DelegateToStorageFacade();
+        facade.Write("payload");
+        Assert.Equal("payload", facade.Read());
+    }
+
+    [Fact]
+    public void WhenInterfaceTypeSpecifiedThenDelegatesOnlyThatInterface()
+    {
+        var type = typeof(DelegateToReaderFacade);
+        Assert.NotNull(type.GetMethod(nameof(IDelegateToReader.Read)));
+        Assert.Null(type.GetMethod(nameof(IDelegateToWriter.Write)));
     }
 }

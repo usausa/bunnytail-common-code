@@ -19,6 +19,18 @@ public sealed partial class EqualityTaggedData
 #pragma warning restore CA1819
 }
 
+[GenerateEquality]
+public partial class EqualityBaseAccount
+{
+    public int Id { get; init; }
+}
+
+[GenerateEquality(CallBase = true)]
+public partial class EqualityMemberAccount : EqualityBaseAccount
+{
+    public string Name { get; init; } = default!;
+}
+
 public class EqualityTest
 {
     [Fact]
@@ -83,5 +95,19 @@ public class EqualityTest
         var a = new EqualityTaggedData { Name = "x", Tags = null! };
         var b = new EqualityTaggedData { Name = "x", Tags = null! };
         Assert.True(a == b);
+    }
+
+    [Fact]
+    public void WhenCallBaseWithInheritanceThenComparesBaseAndDerived()
+    {
+        var a = new EqualityMemberAccount { Id = 1, Name = "Alice" };
+        var b = new EqualityMemberAccount { Id = 1, Name = "Alice" };
+        var differentBase = new EqualityMemberAccount { Id = 2, Name = "Alice" };
+        var differentDerived = new EqualityMemberAccount { Id = 1, Name = "Bob" };
+
+        Assert.True(a.Equals(b));
+        Assert.False(a.Equals(differentBase));    // 基底クラスのプロパティ差分を base.Equals で検出
+        Assert.False(a.Equals(differentDerived)); // 派生クラスのプロパティ差分を検出
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
     }
 }

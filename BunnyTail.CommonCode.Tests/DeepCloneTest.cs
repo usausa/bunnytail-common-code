@@ -28,6 +28,19 @@ public partial class DeepCloneDocumentData : IDeepCloneable<DeepCloneDocumentDat
 #pragma warning restore CA2227
 #pragma warning restore CA1819
 
+[GenerateDeepClone]
+public partial class DeepCloneProfileData : IDeepCloneable<DeepCloneProfileData>
+{
+    // init 専用: オブジェクト初期化子で複製される
+    public string DisplayName { get; init; } = default!;
+
+    // set 可能: 代入で複製される
+    public int Level { get; set; }
+
+    // get-only (計算プロパティ): 代入不能なので複製対象外
+    public string Badge => $"{DisplayName}#{Level}";
+}
+
 public class DeepCloneTest
 {
     [Fact]
@@ -120,5 +133,17 @@ public class DeepCloneTest
         var clone = original.DeepClone();
 
         Assert.Null(clone.Owner);
+    }
+
+    [Fact]
+    public void WhenInitAndGetOnlyPropertiesThenAssignableAreCloned()
+    {
+        var original = new DeepCloneProfileData { DisplayName = "Alice", Level = 7 };
+
+        var clone = original.DeepClone();
+
+        Assert.Equal("Alice", clone.DisplayName); // init はオブジェクト初期化子で複製
+        Assert.Equal(7, clone.Level);             // set は代入で複製
+        Assert.Equal("Alice#7", clone.Badge);     // get-only は複製対象外だが値から再計算される
     }
 }
