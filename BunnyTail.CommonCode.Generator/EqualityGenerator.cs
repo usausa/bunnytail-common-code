@@ -65,14 +65,29 @@ public sealed class EqualityGenerator : IIncrementalGenerator
 
         var generateOperators = GetBoolArg(attr, "GenerateOperators") ?? true;
         var deepCollectionEquality = GetBoolArg(attr, "DeepCollectionEquality") ?? false;
-        var callBase = GetBoolArg(attr, "CallBase") ?? false;
 
+        // 等価判定/ハッシュは、到達できる public プロパティを基底型まで辿って収集する (フラット仕様)
         var properties = new List<EqualityPropertyModel>();
+        var seenNames = new HashSet<string>(StringComparer.Ordinal);
         var currentSymbol = symbol;
         while (currentSymbol != null)
         {
             foreach (var member in currentSymbol.GetMembers().OfType<IPropertySymbol>())
             {
+                // インデクサは this.<Name> でアクセスできないため対象外
+                if (member.IsIndexer)
+                {
+                    continue;
+                }
+
+                // this.<Name> は最派生の宣言に束縛されるため、隠蔽された基底側の同名プロパティは収集しない。
+                // 可視性 / IgnoreEquality 判定より前で登録するのは意図的: 派生の private / ignore な new 隠蔽でも、
+                // this.<Name> から到達できない基底 public を誤って拾わず、コンパイルエラーや誤比較を防ぐ。
+                if (!seenNames.Add(member.Name))
+                {
+                    continue;
+                }
+
                 if (member.DeclaredAccessibility != Accessibility.Public)
                 {
                     continue;
@@ -94,7 +109,10 @@ public sealed class EqualityGenerator : IIncrementalGenerator
                 }
 
                 var isCollection = IsCollectionType(member.Type);
-                properties.Add(new EqualityPropertyModel(member.Name, isCollection));
+                properties.Add(new EqualityPropertyModel(
+                    member.Name,
+                    isCollection,
+                    member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
             }
             currentSymbol = currentSymbol.BaseType;
         }
@@ -112,7 +130,6 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             symbol.IsSealed,
             generateOperators,
             deepCollectionEquality,
-            callBase,
             new EquatableArray<EqualityPropertyModel>(properties.ToArray())));
     }
 
@@ -251,14 +268,6 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             }
         }
 
-        if (type.CallBase)
-        {
-            builder.Indent().Append("if (!base.Equals(other))").NewLine();
-            builder.BeginScope();
-            builder.Indent().Append("return false;").NewLine();
-            builder.EndScope();
-        }
-
         builder.Indent().Append("return ");
 
         for (var i = 0; i < properties.Count; i++)
@@ -282,7 +291,9 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             else
             {
                 builder
-                    .Append("global::System.Collections.Generic.EqualityComparer<object>.Default.Equals(this.")
+                    .Append("global::System.Collections.Generic.EqualityComparer<")
+                    .Append(prop.TypeName)
+                    .Append(">.Default.Equals(this.")
                     .Append(prop.Name)
                     .Append(", other.")
                     .Append(prop.Name)
@@ -298,10 +309,6 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         builder.Indent().Append("public override int GetHashCode()").NewLine();
         builder.BeginScope();
         builder.Indent().Append("var hash = new global::System.HashCode();").NewLine();
-        if (type.CallBase)
-        {
-            builder.Indent().Append("hash.Add(base.GetHashCode());").NewLine();
-        }
         foreach (var prop in properties)
         {
             if (prop.IsCollection && type.DeepCollectionEquality)
@@ -416,10 +423,10 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         bool IsSealed,
         bool GenerateOperators,
         bool DeepCollectionEquality,
-        bool CallBase,
         EquatableArray<EqualityPropertyModel> Properties);
 
     private sealed record EqualityPropertyModel(
         string Name,
-        bool IsCollection);
+        bool IsCollection,
+        string TypeName);
 }

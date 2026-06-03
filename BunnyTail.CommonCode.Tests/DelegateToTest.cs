@@ -58,6 +58,30 @@ public partial class DelegateToReaderFacade
     private readonly DelegateToStorageCore core = new();
 }
 
+public interface IDelegateToFormatService
+{
+    string Format(int value);
+
+    string Format(string value);
+}
+
+public sealed class DelegateToFormatCore : IDelegateToFormatService
+{
+    public string Format(int value) => $"core-int:{value}";
+
+    public string Format(string value) => $"core-string:{value}";
+}
+
+// 手書きの Format(int) があっても、別オーバーロード Format(string) は生成で補完される
+[GenerateDelegateTo]
+public partial class DelegateToFormatFacade : IDelegateToFormatService
+{
+    [DelegateTo]
+    private readonly DelegateToFormatCore core = new();
+
+    public string Format(int value) => $"manual:{value}";
+}
+
 public class DelegateToTest
 {
     [Fact]
@@ -105,5 +129,16 @@ public class DelegateToTest
         var type = typeof(DelegateToReaderFacade);
         Assert.NotNull(type.GetMethod(nameof(IDelegateToReader.Read)));
         Assert.Null(type.GetMethod(nameof(IDelegateToWriter.Write)));
+    }
+
+    [Fact]
+    public void WhenOverloadHandWrittenThenOtherOverloadIsGenerated()
+    {
+        // DelegateToFormatFacade : IDelegateToFormatService がコンパイルできる時点で、
+        // 手書きの Format(int) に加えて Format(string) が生成されインターフェース実装が完結している
+        var facade = new DelegateToFormatFacade();
+
+        Assert.Equal("manual:5", facade.Format(5));        // 手書きの実装
+        Assert.Equal("core-string:x", facade.Format("x")); // 生成で補完され core へ委譲
     }
 }

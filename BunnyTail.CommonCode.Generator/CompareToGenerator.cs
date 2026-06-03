@@ -68,6 +68,12 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         var keys = new List<(int Order, string Name, string TypeName)>();
         foreach (var member in symbol.GetMembers().OfType<IPropertySymbol>())
         {
+            // インデクサは this.<Name> でアクセスできないため対象外
+            if (member.IsIndexer)
+            {
+                continue;
+            }
+
             if (member.DeclaredAccessibility != Accessibility.Public)
             {
                 continue;

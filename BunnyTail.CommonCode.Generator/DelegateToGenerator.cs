@@ -63,12 +63,20 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         var delegateGroups = new List<DelegateGroupModel>();
         var diagnostics = new List<DiagnosticInfo>();
 
-        // 既にクラスが実装しているメンバ名を収集 (手書きで実装しているものはスキップ)
-        var existingMemberNames = new HashSet<string>(
-            symbol.GetMembers()
-                .Where(m => (m is IMethodSymbol ms && ms.MethodKind == MethodKind.Ordinary && !m.IsAbstract) ||
-                            (m is IPropertySymbol ps && !ps.IsAbstract))
-                .Select(m => m.Name));
+        // 既にクラスが実装しているメンバを収集 (手書きで実装しているものはスキップ)
+        // メソッドはオーバーロードを区別するためシグネチャ単位で扱う
+        var existingSignatures = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var existing in symbol.GetMembers())
+        {
+            if (existing is IMethodSymbol existingMethod && existingMethod.MethodKind == MethodKind.Ordinary && !existingMethod.IsAbstract)
+            {
+                existingSignatures.Add(MakeMethodSignature(existingMethod));
+            }
+            else if (existing is IPropertySymbol existingProperty && !existingProperty.IsAbstract)
+            {
+                existingSignatures.Add("property:" + existingProperty.Name);
+            }
+        }
 
         foreach (var member in symbol.GetMembers())
         {
@@ -154,12 +162,13 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                             continue;
                         }
 
-                        if (existingMemberNames.Contains(method.Name))
+                        var methodSignature = MakeMethodSignature(method);
+                        if (existingSignatures.Contains(methodSignature))
                         {
                             continue;
                         }
 
-                        if (!seenSignatures.Add(MakeMethodSignature(method)))
+                        if (!seenSignatures.Add(methodSignature))
                         {
                             continue;
                         }
@@ -177,12 +186,13 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                     }
                     else if (ifaceMember is IPropertySymbol propMember)
                     {
-                        if (existingMemberNames.Contains(propMember.Name))
+                        var propertySignature = "property:" + propMember.Name;
+                        if (existingSignatures.Contains(propertySignature))
                         {
                             continue;
                         }
 
-                        if (!seenSignatures.Add("property:" + propMember.Name))
+                        if (!seenSignatures.Add(propertySignature))
                         {
                             continue;
                         }

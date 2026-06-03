@@ -41,6 +41,21 @@ public partial class DeepCloneProfileData : IDeepCloneable<DeepCloneProfileData>
     public string Badge => $"{DisplayName}#{Level}";
 }
 
+// インデクサは複製対象外 (clone.<Name> で代入できないため)
+[GenerateDeepClone]
+public partial class DeepCloneIndexedData : IDeepCloneable<DeepCloneIndexedData>
+{
+    private readonly Dictionary<string, string> map = [];
+
+    public string Title { get; set; } = default!;
+
+    public string this[string key]
+    {
+        get => this.map[key];
+        set => this.map[key] = value;
+    }
+}
+
 public class DeepCloneTest
 {
     [Fact]
@@ -145,5 +160,16 @@ public class DeepCloneTest
         Assert.Equal("Alice", clone.DisplayName); // init はオブジェクト初期化子で複製
         Assert.Equal(7, clone.Level);             // set は代入で複製
         Assert.Equal("Alice#7", clone.Badge);     // get-only は複製対象外だが値から再計算される
+    }
+
+    [Fact]
+    public void WhenTypeHasIndexerThenIndexerIsExcluded()
+    {
+        var original = new DeepCloneIndexedData { Title = "t" };
+        original["k"] = "v";
+
+        var clone = original.DeepClone();
+
+        Assert.Equal("t", clone.Title); // インデクサは対象外で Title のみ複製
     }
 }

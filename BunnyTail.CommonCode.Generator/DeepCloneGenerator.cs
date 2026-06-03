@@ -74,6 +74,12 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         var diagnostics = new List<DiagnosticInfo>();
         foreach (var member in symbol.GetMembers().OfType<IPropertySymbol>())
         {
+            // インデクサは clone.<Name> で代入できないため対象外
+            if (member.IsIndexer)
+            {
+                continue;
+            }
+
             if (member.DeclaredAccessibility != Accessibility.Public)
             {
                 continue;

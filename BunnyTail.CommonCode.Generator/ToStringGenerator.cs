@@ -98,17 +98,48 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         containingTypes?.Reverse();
 
         var properties = new List<PropertyModel>();
+        var seenNames = new HashSet<string>(StringComparer.Ordinal);
         var currentSymbol = symbol;
         while (currentSymbol != null)
         {
-            properties.AddRange(
-                currentSymbol.GetMembers()
-                    .OfType<IPropertySymbol>()
-                    .Where(x => (x.DeclaredAccessibility == Accessibility.Public) &&
-                                (x.GetMethod != null) &&
-                                !x.IsWriteOnly &&
-                                !x.GetAttributes().Any(attr => attr.AttributeClass?.ToDisplayString() == IgnoreAttributeName))
-                    .Select(GetPropertyModel));
+            foreach (var member in currentSymbol.GetMembers().OfType<IPropertySymbol>())
+            {
+                // インデクサは this.<Name> でアクセスできないため対象外
+                if (member.IsIndexer)
+                {
+                    continue;
+                }
+
+                // this.<Name> は最派生の宣言に束縛されるため、隠蔽された基底側の同名プロパティは収集しない。
+                // 可視性 / IgnoreToString 判定より前で登録するのは意図的: 派生の private / ignore な new 隠蔽でも、
+                // this.<Name> から到達できない基底 public を誤って拾わず、隠蔽 / ignore したメンバの値を出力しない。
+                if (!seenNames.Add(member.Name))
+                {
+                    continue;
+                }
+
+                if (member.DeclaredAccessibility != Accessibility.Public)
+                {
+                    continue;
+                }
+
+                if (member.GetMethod == null)
+                {
+                    continue;
+                }
+
+                if (member.IsWriteOnly)
+                {
+                    continue;
+                }
+
+                if (member.GetAttributes().Any(attr => attr.AttributeClass?.ToDisplayString() == IgnoreAttributeName))
+                {
+                    continue;
+                }
+
+                properties.Add(GetPropertyModel(member));
+            }
             currentSymbol = currentSymbol.BaseType;
         }
 

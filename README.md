@@ -75,7 +75,8 @@ public sealed partial class TaggedData
 |---|---|---|
 | `GenerateOperators` | `true` | Emit `==` and `!=` operators |
 | `DeepCollectionEquality` | `false` | Use `SequenceEqual` for collection properties |
-| `CallBase` | `false` | Call `base.Equals` / `base.GetHashCode` |
+
+Equality and hash code are computed from all reachable public properties, including those inherited from base types (flattened). `base.Equals` / `base.GetHashCode` are not called.
 
 ### Result
 

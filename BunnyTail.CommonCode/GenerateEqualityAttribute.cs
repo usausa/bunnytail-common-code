@@ -8,7 +8,4 @@ public sealed class GenerateEqualityAttribute : Attribute
 
     // コレクション要素を SequenceEqual で比較するか (既定: false)
     public bool DeepCollectionEquality { get; set; }
-
-    // 基底クラスの Equals を呼ぶか (継承時, 既定: false)
-    public bool CallBase { get; set; }
 }
