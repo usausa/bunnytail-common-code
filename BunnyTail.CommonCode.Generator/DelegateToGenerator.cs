@@ -61,6 +61,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         containingTypes?.Reverse();
 
         var delegateGroups = new List<DelegateGroupModel>();
+        var diagnostics = new List<DiagnosticInfo>();
 
         // 既にクラスが実装しているメンバ名を収集 (手書きで実装しているものはスキップ)
         var existingMemberNames = new HashSet<string>(
@@ -103,19 +104,36 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                 continue;
             }
 
-            // InterfaceType 引数は型引数として取れないため、メンバ型を使用
-            var interfaceType = memberType;
+            // 明示指定された InterfaceType を取得
+            var delegateAttr = memberAttrs.First(a => a.AttributeClass?.ToDisplayString() == DelegateToAttributeName);
+            var specifiedInterface = GetInterfaceTypeArg(delegateAttr);
 
-            // インターフェース型に限定 (具象クラスの場合、実装インターフェースを使う)
-            IEnumerable<ITypeSymbol> interfacesToDelegate;
-            if (interfaceType.TypeKind == TypeKind.Interface)
+            // 委譲対象のインターフェースを解決する
+            //  - InterfaceType が指定された場合はその型 (メンバ型が実装しているか検証)
+            //  - メンバ型がインターフェースの場合はそのインターフェース
+            //  - メンバ型が具象型の場合はその型が実装するインターフェース群
+            IEnumerable<INamedTypeSymbol> interfaces;
+            if (specifiedInterface is not null)
             {
-                interfacesToDelegate = [interfaceType];
+                if ((specifiedInterface.TypeKind != TypeKind.Interface) || !ImplementsInterface(memberType, specifiedInterface))
+                {
+                    diagnostics.Add(new DiagnosticInfo(
+                        Diagnostics.DelegateToInvalidInterfaceType,
+                        member.Locations.FirstOrDefault() ?? syntax.GetLocation(),
+                        memberName,
+                        specifiedInterface.ToDisplayString()));
+                    continue;
+                }
+
+                interfaces = WithBaseInterfaces(specifiedInterface);
             }
-            else if (interfaceType is INamedTypeSymbol)
+            else if (memberType is INamedTypeSymbol namedMemberType && memberType.TypeKind == TypeKind.Interface)
             {
-                // 具象型の場合、クラス自身が宣言しているインターフェースを使う
-                interfacesToDelegate = symbol.Interfaces;
+                interfaces = WithBaseInterfaces(namedMemberType);
+            }
+            else if (memberType is INamedTypeSymbol)
+            {
+                interfaces = memberType.AllInterfaces;
             }
             else
             {
@@ -123,27 +141,25 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
             }
 
             var methods = new List<DelegateMethodModel>();
+            var seenSignatures = new HashSet<string>(StringComparer.Ordinal);
 
-            foreach (var iface in interfacesToDelegate)
+            foreach (var iface in interfaces)
             {
-                IEnumerable<ISymbol> allMembers = iface.GetMembers();
-                if (iface is INamedTypeSymbol namedIface)
-                {
-                    allMembers = namedIface.AllInterfaces
-                        .SelectMany(i => i.GetMembers())
-                        .Concat(allMembers);
-                }
-
-                foreach (var ifaceMember in allMembers)
+                foreach (var ifaceMember in iface.GetMembers())
                 {
                     if (ifaceMember is IMethodSymbol method)
                     {
+                        if (method.MethodKind != MethodKind.Ordinary)
+                        {
+                            continue;
+                        }
+
                         if (existingMemberNames.Contains(method.Name))
                         {
                             continue;
                         }
 
-                        if (method.MethodKind != MethodKind.Ordinary)
+                        if (!seenSignatures.Add(MakeMethodSignature(method)))
                         {
                             continue;
                         }
@@ -166,6 +182,11 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                             continue;
                         }
 
+                        if (!seenSignatures.Add("property:" + propMember.Name))
+                        {
+                            continue;
+                        }
+
                         methods.Add(new DelegateMethodModel(
                             propMember.Name,
                             propMember.Type.ToDisplayString(),
@@ -183,22 +204,88 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
             {
                 delegateGroups.Add(new DelegateGroupModel(
                     memberName,
-                    interfaceType.ToDisplayString(),
+                    memberType.ToDisplayString(),
                     new EquatableArray<DelegateMethodModel>(methods.ToArray())));
             }
         }
 
         if (delegateGroups.Count == 0)
         {
-            return Results.Error<DelegateToTypeModel>(new DiagnosticInfo(Diagnostics.DelegateToNoDelegateField, syntax.GetLocation(), symbol.Name));
+            if (diagnostics.Count == 0)
+            {
+                diagnostics.Add(new DiagnosticInfo(Diagnostics.DelegateToNoDelegateField, syntax.GetLocation(), symbol.Name));
+            }
+
+            return new Result<DelegateToTypeModel>(default!, new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
         }
 
-        return Results.Success(new DelegateToTypeModel(
+        var model = new DelegateToTypeModel(
             ns,
             new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
             symbol.GetClassName(),
             symbol.IsValueType,
-            new EquatableArray<DelegateGroupModel>(delegateGroups.ToArray())));
+            new EquatableArray<DelegateGroupModel>(delegateGroups.ToArray()));
+
+        return diagnostics.Count == 0
+            ? Results.Success(model)
+            : new Result<DelegateToTypeModel>(model, new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
+    }
+
+    private static INamedTypeSymbol? GetInterfaceTypeArg(AttributeData attr)
+    {
+        var arg = attr.NamedArguments.FirstOrDefault(na => na.Key == "InterfaceType");
+        if (arg.Value.IsNull)
+        {
+            return null;
+        }
+
+        return arg.Value.Value as INamedTypeSymbol;
+    }
+
+    private static bool ImplementsInterface(ITypeSymbol type, INamedTypeSymbol interfaceType)
+    {
+        if (SymbolEqualityComparer.Default.Equals(type, interfaceType))
+        {
+            return true;
+        }
+
+        foreach (var iface in type.AllInterfaces)
+        {
+            if (SymbolEqualityComparer.Default.Equals(iface, interfaceType))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<INamedTypeSymbol> WithBaseInterfaces(INamedTypeSymbol interfaceType)
+    {
+        yield return interfaceType;
+        foreach (var iface in interfaceType.AllInterfaces)
+        {
+            yield return iface;
+        }
+    }
+
+    private static string MakeMethodSignature(IMethodSymbol method)
+    {
+        var buffer = new StringBuilder();
+        buffer.Append(method.Name);
+        buffer.Append('`').Append(method.TypeParameters.Length);
+        buffer.Append('(');
+        for (var i = 0; i < method.Parameters.Length; i++)
+        {
+            if (i > 0)
+            {
+                buffer.Append(',');
+            }
+
+            buffer.Append(method.Parameters[i].Type.ToDisplayString());
+        }
+        buffer.Append(')');
+        return buffer.ToString();
     }
 
     // ------------------------------------------------------------

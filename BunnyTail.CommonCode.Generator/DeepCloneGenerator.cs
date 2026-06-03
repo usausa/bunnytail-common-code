@@ -71,6 +71,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         containingTypes?.Reverse();
 
         var properties = new List<ClonePropertyModel>();
+        var diagnostics = new List<DiagnosticInfo>();
         foreach (var member in symbol.GetMembers().OfType<IPropertySymbol>())
         {
             if (member.DeclaredAccessibility != Accessibility.Public)
@@ -83,8 +84,8 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
                 continue;
             }
 
-            // 読み取り専用かつ init/set が両方なければスキップ
-            if (member.SetMethod == null && !member.IsReadOnly)
+            // set / init のいずれも持たない (get-only) プロパティは代入できないため対象外
+            if (member.SetMethod == null)
             {
                 continue;
             }
@@ -101,6 +102,12 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
 
             if (!shallow && cloneStrategy == CloneStrategy.Unknown)
             {
+                // ディープクローン手段が不明な参照型はシャローコピーに落とすが、利用者へ診断で通知する
+                diagnostics.Add(new DiagnosticInfo(
+                    Diagnostics.DeepClonePropertyMissingDeepClone,
+                    member.Locations.FirstOrDefault() ?? syntax.GetLocation(),
+                    member.Name,
+                    member.Type.ToDisplayString()));
                 cloneStrategy = CloneStrategy.Shallow;
             }
 
@@ -108,15 +115,20 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
                 member.Name,
                 member.Type.ToDisplayString(),
                 cloneStrategy,
-                member.Type.IsReferenceType));
+                member.Type.IsReferenceType,
+                member.SetMethod.IsInitOnly));
         }
 
-        return Results.Success(new DeepCloneTypeModel(
+        var model = new DeepCloneTypeModel(
             ns,
             new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
             symbol.GetClassName(),
             symbol.IsValueType,
-            new EquatableArray<ClonePropertyModel>(properties.ToArray())));
+            new EquatableArray<ClonePropertyModel>(properties.ToArray()));
+
+        return diagnostics.Count == 0
+            ? Results.Success(model)
+            : new Result<DeepCloneTypeModel>(model, new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
     }
 
     private static CloneStrategy GetCloneStrategy(ITypeSymbol typeSymbol)
@@ -212,84 +224,51 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
             .NewLine();
         builder.BeginScope();
 
-        builder.Indent()
-            .Append("var clone = new ")
-            .Append(type.ClassName)
-            .Append("();")
-            .NewLine();
+        builder.Indent().Append("var clone = new ").Append(type.ClassName);
 
+        // init 専用プロパティはコンストラクション後に代入できないため、オブジェクト初期化子で設定する
+        var hasInit = false;
         foreach (var prop in properties)
         {
-            builder.Indent().Append("clone.").Append(prop.Name).Append(" = ");
-
-            switch (prop.Strategy)
+            if (!prop.RequiresInit)
             {
-                case CloneStrategy.Direct:
-                case CloneStrategy.Shallow:
-                    builder.Append("this.").Append(prop.Name).Append(";").NewLine();
-                    break;
-
-                case CloneStrategy.DeepClone:
-                    if (prop.IsReferenceType)
-                    {
-                        builder
-                            .Append("this.").Append(prop.Name)
-                            .Append(" is null ? null! : this.").Append(prop.Name).Append(".DeepClone();")
-                            .NewLine();
-                    }
-                    else
-                    {
-                        builder.Append("this.").Append(prop.Name).Append(".DeepClone();").NewLine();
-                    }
-                    break;
-
-                case CloneStrategy.Array:
-                    if (prop.IsReferenceType)
-                    {
-                        builder
-                            .Append("this.").Append(prop.Name)
-                            .Append(" is null ? null! : (")
-                            .Append(prop.TypeDisplayName)
-                            .Append(")((global::System.Array)this.")
-                            .Append(prop.Name)
-                            .Append(").Clone();")
-                            .NewLine();
-                    }
-                    else
-                    {
-                        builder
-                            .Append("(")
-                            .Append(prop.TypeDisplayName)
-                            .Append(")((global::System.Array)this.")
-                            .Append(prop.Name)
-                            .Append(").Clone();")
-                            .NewLine();
-                    }
-                    break;
-
-                case CloneStrategy.List:
-                    if (prop.IsReferenceType)
-                    {
-                        builder
-                            .Append("this.").Append(prop.Name)
-                            .Append(" is null ? null! : new ")
-                            .Append(prop.TypeDisplayName)
-                            .Append("(this.").Append(prop.Name).Append(");")
-                            .NewLine();
-                    }
-                    else
-                    {
-                        builder
-                            .Append("new ").Append(prop.TypeDisplayName)
-                            .Append("(this.").Append(prop.Name).Append(");")
-                            .NewLine();
-                    }
-                    break;
-
-                default:
-                    builder.Append("this.").Append(prop.Name).Append(";").NewLine();
-                    break;
+                continue;
             }
+
+            if (!hasInit)
+            {
+                builder.NewLine();
+                builder.Indent().Append("{").NewLine();
+                builder.IndentLevel++;
+                hasInit = true;
+            }
+
+            builder.Indent().Append(prop.Name).Append(" = ");
+            BuildCloneExpression(builder, prop);
+            builder.Append(",").NewLine();
+        }
+
+        if (hasInit)
+        {
+            builder.IndentLevel--;
+            builder.Indent().Append("};").NewLine();
+        }
+        else
+        {
+            builder.Append("();").NewLine();
+        }
+
+        // set 可能なプロパティは代入で設定する
+        foreach (var prop in properties)
+        {
+            if (prop.RequiresInit)
+            {
+                continue;
+            }
+
+            builder.Indent().Append("clone.").Append(prop.Name).Append(" = ");
+            BuildCloneExpression(builder, prop);
+            builder.Append(";").NewLine();
         }
 
         builder.Indent().Append("return clone;").NewLine();
@@ -301,6 +280,70 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         for (var i = 0; i < containingTypes.Count; i++)
         {
             builder.EndScope();
+        }
+    }
+
+    private static void BuildCloneExpression(SourceBuilder builder, ClonePropertyModel prop)
+    {
+        switch (prop.Strategy)
+        {
+            case CloneStrategy.DeepClone:
+                if (prop.IsReferenceType)
+                {
+                    builder
+                        .Append("this.").Append(prop.Name)
+                        .Append(" is null ? null! : this.").Append(prop.Name).Append(".DeepClone()");
+                }
+                else
+                {
+                    builder.Append("this.").Append(prop.Name).Append(".DeepClone()");
+                }
+                break;
+
+            case CloneStrategy.Array:
+                if (prop.IsReferenceType)
+                {
+                    builder
+                        .Append("this.").Append(prop.Name)
+                        .Append(" is null ? null! : (")
+                        .Append(prop.TypeDisplayName)
+                        .Append(")((global::System.Array)this.")
+                        .Append(prop.Name)
+                        .Append(").Clone()");
+                }
+                else
+                {
+                    builder
+                        .Append("(")
+                        .Append(prop.TypeDisplayName)
+                        .Append(")((global::System.Array)this.")
+                        .Append(prop.Name)
+                        .Append(").Clone()");
+                }
+                break;
+
+            case CloneStrategy.List:
+                if (prop.IsReferenceType)
+                {
+                    builder
+                        .Append("this.").Append(prop.Name)
+                        .Append(" is null ? null! : new ")
+                        .Append(prop.TypeDisplayName)
+                        .Append("(this.").Append(prop.Name).Append(")");
+                }
+                else
+                {
+                    builder
+                        .Append("new ").Append(prop.TypeDisplayName)
+                        .Append("(this.").Append(prop.Name).Append(")");
+                }
+                break;
+
+            case CloneStrategy.Direct:
+            case CloneStrategy.Shallow:
+            default:
+                builder.Append("this.").Append(prop.Name);
+                break;
         }
     }
 
@@ -349,5 +392,6 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         string Name,
         string TypeDisplayName,
         CloneStrategy Strategy,
-        bool IsReferenceType);
+        bool IsReferenceType,
+        bool RequiresInit);
 }

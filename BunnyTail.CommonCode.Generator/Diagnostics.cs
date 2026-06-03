@@ -72,6 +72,14 @@ internal static class Diagnostics
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
+    public static DiagnosticDescriptor DelegateToInvalidInterfaceType { get; } = new(
+        id: "BTCC0303",
+        title: "Invalid InterfaceType for [DelegateTo]",
+        messageFormat: "InterfaceType must be an interface implemented by the delegate member type. member=[{0}], interfaceType=[{1}]",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
     // CompareTo
     public static DiagnosticDescriptor CompareToInvalidTypeDefinition { get; } = new(
         id: "BTCC0401",

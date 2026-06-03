@@ -65,7 +65,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
 
         var generateOperators = GetBoolArg(attr, "GenerateOperators") ?? true;
 
-        var keys = new List<(int Order, string Name)>();
+        var keys = new List<(int Order, string Name, string TypeName)>();
         foreach (var member in symbol.GetMembers().OfType<IPropertySymbol>())
         {
             if (member.DeclaredAccessibility != Accessibility.Public)
@@ -80,7 +80,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
                 continue;
             }
             var order = GetIntArg(keyAttr, "Order") ?? 0;
-            keys.Add((order, member.Name));
+            keys.Add((order, member.Name, member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
         }
 
         if (keys.Count == 0)
@@ -96,7 +96,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
             symbol.GetClassName(),
             symbol.IsValueType,
             generateOperators,
-            new EquatableArray<string>(keys.Select(k => k.Name).ToArray())));
+            new EquatableArray<CompareKeyModel>(keys.Select(static k => new CompareKeyModel(k.Name, k.TypeName)).ToArray())));
     }
 
     private static bool? GetBoolArg(AttributeData attr, string name)
@@ -210,10 +210,12 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         foreach (var key in keys)
         {
             builder.Indent()
-                .Append("result = global::System.Collections.Generic.Comparer<object>.Default.Compare(this.")
-                .Append(key)
+                .Append("result = global::System.Collections.Generic.Comparer<")
+                .Append(key.TypeName)
+                .Append(">.Default.Compare(this.")
+                .Append(key.Name)
                 .Append(", other.")
-                .Append(key)
+                .Append(key.Name)
                 .Append(");")
                 .NewLine();
             builder.Indent().Append("if (result != 0)").NewLine();
@@ -297,5 +299,9 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         string ClassName,
         bool IsValueType,
         bool GenerateOperators,
-        EquatableArray<string> Keys);
+        EquatableArray<CompareKeyModel> Keys);
+
+    private sealed record CompareKeyModel(
+        string Name,
+        string TypeName);
 }
