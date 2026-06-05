@@ -14,10 +14,12 @@ using SourceGenerateHelper;
 [Generator]
 public sealed class DeepCloneGenerator : IIncrementalGenerator
 {
+    // ReSharper disable InconsistentNaming
     private const string GenerateAttributeName = "BunnyTail.CommonCode.GenerateDeepCloneAttribute";
     private const string ShallowCloneAttributeName = "BunnyTail.CommonCode.ShallowCloneAttribute";
     private const string CloneIgnoreAttributeName = "BunnyTail.CommonCode.IgnoreCloneAttribute";
-    private const string IDeepCloneableConstructedName = "BunnyTail.CommonCode.IDeepCloneable<T>";
+    private const string IDeepCloneableName = "BunnyTail.CommonCode.IDeepCloneable<T>";
+    // ReSharper restore InconsistentNaming
 
     // ------------------------------------------------------------
     // Initialize
@@ -50,7 +52,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
 
         // IDeepCloneable<T> を実装しているか確認
         var implementsDeepCloneable = symbol.AllInterfaces.Any(i =>
-            i.IsGenericType && i.ConstructedFrom.ToDisplayString() == IDeepCloneableConstructedName);
+            i.IsGenericType && i.ConstructedFrom.ToDisplayString() == IDeepCloneableName);
         if (!implementsDeepCloneable)
         {
             return Results.Error<DeepCloneTypeModel>(new DiagnosticInfo(Diagnostics.DeepCloneNotImplementIDeepCloneable, syntax.GetLocation(), symbol.Name));
@@ -144,7 +146,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
             return CloneStrategy.Direct;
         }
 
-        if (typeSymbol.AllInterfaces.Any(i => i.IsGenericType && i.ConstructedFrom.ToDisplayString() == IDeepCloneableConstructedName))
+        if (typeSymbol.AllInterfaces.Any(i => i.IsGenericType && i.ConstructedFrom.ToDisplayString() == IDeepCloneableName))
         {
             return CloneStrategy.DeepClone;
         }
