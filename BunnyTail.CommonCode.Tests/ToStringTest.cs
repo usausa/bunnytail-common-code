@@ -58,8 +58,8 @@ public partial class ToStringIndexedData
 
     public string this[string key]
     {
-        get => this.map[key];
-        set => this.map[key] = value;
+        get => map[key];
+        set => map[key] = value;
     }
 }
 
@@ -125,8 +125,11 @@ public class ToStringTest
     [Fact]
     public void TestIndexerExcluded()
     {
-        var data = new ToStringIndexedData { Name = "x" };
-        data["k"] = "v";
+        var data = new ToStringIndexedData
+        {
+            Name = "x",
+            ["k"] = "v"
+        };
 
         Assert.Equal("{ Name = x }", data.ToString());
     }

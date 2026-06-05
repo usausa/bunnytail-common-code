@@ -66,6 +66,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         var generateOperators = GetBoolArg(attr, "GenerateOperators") ?? true;
 
         var keys = new List<(int Order, string Name, string TypeName)>();
+        // ReSharper disable once LoopCanBeConvertedToQuery
         foreach (var member in symbol.GetMembers().OfType<IPropertySymbol>())
         {
             // インデクサは this.<Name> でアクセスできないため対象外

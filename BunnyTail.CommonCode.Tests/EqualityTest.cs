@@ -53,8 +53,8 @@ public partial class EqualityIndexedData
 
     public string this[string key]
     {
-        get => this.map[key];
-        set => this.map[key] = value;
+        get => map[key];
+        set => map[key] = value;
     }
 }
 

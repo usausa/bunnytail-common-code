@@ -51,8 +51,8 @@ public partial class DeepCloneIndexedData : IDeepCloneable<DeepCloneIndexedData>
 
     public string this[string key]
     {
-        get => this.map[key];
-        set => this.map[key] = value;
+        get => map[key];
+        set => map[key] = value;
     }
 }
 
@@ -165,8 +165,11 @@ public class DeepCloneTest
     [Fact]
     public void WhenTypeHasIndexerThenIndexerIsExcluded()
     {
-        var original = new DeepCloneIndexedData { Title = "t" };
-        original["k"] = "v";
+        var original = new DeepCloneIndexedData
+        {
+            Title = "t",
+            ["k"] = "v"
+        };
 
         var clone = original.DeepClone();
 

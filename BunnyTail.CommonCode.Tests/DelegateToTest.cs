@@ -37,9 +37,9 @@ public sealed class DelegateToStorageCore : IDelegateToReader, IDelegateToWriter
 {
     private string content = string.Empty;
 
-    public string Read() => this.content;
+    public string Read() => content;
 
-    public void Write(string value) => this.content = value;
+    public void Write(string value) => content = value;
 }
 
 // 委譲元クラス自身はインターフェースを実装していない (メンバ型が実装するインターフェース経由で解決されることを検証)

@@ -212,10 +212,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
 
             if (methods.Count > 0)
             {
-                delegateGroups.Add(new DelegateGroupModel(
-                    memberName,
-                    memberType.ToDisplayString(),
-                    new EquatableArray<DelegateMethodModel>(methods.ToArray())));
+                delegateGroups.Add(new DelegateGroupModel(memberName, new EquatableArray<DelegateMethodModel>(methods.ToArray())));
             }
         }
 
@@ -356,7 +353,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         var first = true;
         foreach (var group in type.Groups)
         {
-            foreach (var method in group.Methods)
+            foreach (var (name, returnType, isVoid, parameters, typeParams, isProperty, hasGetter, hasSetter) in group.Methods)
             {
                 if (!first)
                 {
@@ -364,32 +361,32 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                 }
                 first = false;
 
-                if (method.IsProperty)
+                if (isProperty)
                 {
                     builder.Indent()
                         .Append("public ")
-                        .Append(method.ReturnType)
+                        .Append(returnType)
                         .Append(" ")
-                        .Append(method.Name)
+                        .Append(name)
                         .NewLine();
                     builder.BeginScope();
-                    if (method.HasGetter)
+                    if (hasGetter)
                     {
                         builder.Indent()
                             .Append("get => this.")
                             .Append(group.MemberName)
                             .Append(".")
-                            .Append(method.Name)
+                            .Append(name)
                             .Append(";")
                             .NewLine();
                     }
-                    if (method.HasSetter)
+                    if (hasSetter)
                     {
                         builder.Indent()
                             .Append("set => this.")
                             .Append(group.MemberName)
                             .Append(".")
-                            .Append(method.Name)
+                            .Append(name)
                             .Append(" = value;")
                             .NewLine();
                     }
@@ -397,10 +394,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                 }
                 else
                 {
-                    var typeParams = method.TypeParameters;
-                    var parameters = method.Parameters;
-
-                    builder.Indent().Append("public ").Append(method.ReturnType).Append(" ").Append(method.Name);
+                    builder.Indent().Append("public ").Append(returnType).Append(" ").Append(name);
 
                     if (typeParams.Count > 0)
                     {
@@ -435,12 +429,12 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                     builder.BeginScope();
 
                     builder.Indent();
-                    if (!method.IsVoid)
+                    if (!isVoid)
                     {
                         builder.Append("return ");
                     }
 
-                    builder.Append("this.").Append(group.MemberName).Append(".").Append(method.Name);
+                    builder.Append("this.").Append(group.MemberName).Append(".").Append(name);
                     if (typeParams.Count > 0)
                     {
                         builder.Append("<").Append(String.Join(", ", typeParams)).Append(">");
@@ -517,7 +511,6 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
 
     private sealed record DelegateGroupModel(
         string MemberName,
-        string InterfaceTypeName,
         EquatableArray<DelegateMethodModel> Methods);
 
     private sealed record DelegateMethodModel(
