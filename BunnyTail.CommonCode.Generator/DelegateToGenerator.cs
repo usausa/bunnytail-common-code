@@ -52,7 +52,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
 
         var containingTypes = default(List<ContainingTypeModel>?);
         var containingSymbol = symbol.ContainingType;
-        while (containingSymbol != null)
+        while (containingSymbol is not null)
         {
             containingTypes ??= [];
             containingTypes.Add(new ContainingTypeModel(containingSymbol.GetClassName(), containingSymbol.IsValueType));
@@ -107,7 +107,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                 memberAttrs = prop.GetAttributes();
             }
 
-            if (memberType == null || memberName == null)
+            if (memberType is null || memberName is null)
             {
                 continue;
             }
@@ -204,8 +204,8 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                             new EquatableArray<ParameterModel>([]),
                             new EquatableArray<string>([]),
                             IsProperty: true,
-                            HasGetter: propMember.GetMethod != null,
-                            HasSetter: propMember.SetMethod != null));
+                            HasGetter: propMember.GetMethod is not null,
+                            HasSetter: propMember.SetMethod is not null));
                     }
                 }
             }

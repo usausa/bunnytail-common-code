@@ -89,7 +89,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 
         var containingTypes = default(List<ContainingTypeModel>?);
         var containingSymbol = symbol.ContainingType;
-        while (containingSymbol != null)
+        while (containingSymbol is not null)
         {
             containingTypes ??= [];
             containingTypes.Add(new ContainingTypeModel(containingSymbol.GetClassName(), containingSymbol.IsValueType));
@@ -100,7 +100,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         var properties = new List<PropertyModel>();
         var seenNames = new HashSet<string>(StringComparer.Ordinal);
         var currentSymbol = symbol;
-        while (currentSymbol != null)
+        while (currentSymbol is not null)
         {
             foreach (var member in currentSymbol.GetMembers().OfType<IPropertySymbol>())
             {
@@ -123,7 +123,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
                     continue;
                 }
 
-                if (member.GetMethod == null)
+                if (member.GetMethod is null)
                 {
                     continue;
                 }

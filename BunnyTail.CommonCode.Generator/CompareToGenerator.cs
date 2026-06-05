@@ -52,7 +52,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
 
         var containingTypes = default(List<ContainingTypeModel>?);
         var containingSymbol = symbol.ContainingType;
-        while (containingSymbol != null)
+        while (containingSymbol is not null)
         {
             containingTypes ??= [];
             containingTypes.Add(new ContainingTypeModel(containingSymbol.GetClassName(), containingSymbol.IsValueType));
@@ -82,7 +82,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
 
             var keyAttr = member.GetAttributes()
                 .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == CompareKeyAttributeName);
-            if (keyAttr == null)
+            if (keyAttr is null)
             {
                 continue;
             }

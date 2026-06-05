@@ -64,7 +64,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
 
         var containingTypes = default(List<ContainingTypeModel>?);
         var containingSymbol = symbol.ContainingType;
-        while (containingSymbol != null)
+        while (containingSymbol is not null)
         {
             containingTypes ??= [];
             containingTypes.Add(new ContainingTypeModel(containingSymbol.GetClassName(), containingSymbol.IsValueType));
@@ -87,13 +87,13 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
                 continue;
             }
 
-            if (member.GetMethod == null)
+            if (member.GetMethod is null)
             {
                 continue;
             }
 
             // set / init のいずれも持たない (get-only) プロパティは代入できないため対象外
-            if (member.SetMethod == null)
+            if (member.SetMethod is null)
             {
                 continue;
             }
