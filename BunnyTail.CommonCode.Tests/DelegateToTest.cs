@@ -82,6 +82,60 @@ public partial class DelegateToFormatFacade : IDelegateToFormatService
     public string Format(int value) => $"manual:{value}";
 }
 
+public interface IDelegateToManualMethod
+{
+    string GetMessage();
+
+    void Reset();
+}
+
+public sealed class DelegateToManualMethodCore : IDelegateToManualMethod
+{
+    public int ResetCount { get; private set; }
+
+    public string GetMessage() => "core-message";
+
+    public void Reset() => ResetCount++;
+}
+
+// オーバーロードの無い単一メソッド GetMessage() を手書きした場合、その委譲は生成されず、
+// 手書きしていない Reset() のみ生成されることを検証する
+[GenerateDelegateTo]
+public partial class DelegateToManualMethodFacade : IDelegateToManualMethod
+{
+    [DelegateTo]
+    private readonly DelegateToManualMethodCore core = new();
+
+    public string GetMessage() => "manual-message";
+
+    public int CoreResetCount => core.ResetCount;
+}
+
+public interface IDelegateToManualProperty
+{
+    int Value { get; set; }
+
+    string Describe();
+}
+
+public sealed class DelegateToManualPropertyCore : IDelegateToManualProperty
+{
+    public int Value { get; set; }
+
+    public string Describe() => $"core:{Value}";
+}
+
+// Value プロパティを手書きした場合、その委譲は生成されず、手書きしていない Describe() のみ生成されることを検証する
+[GenerateDelegateTo]
+public partial class DelegateToManualPropertyFacade : IDelegateToManualProperty
+{
+    [DelegateTo]
+    private readonly DelegateToManualPropertyCore core = new();
+
+    // 手書きの Value。委譲が生成された場合は core.Value へ転送されるが、手書きのため core とは独立している
+    public int Value { get; set; }
+}
+
 public class DelegateToTest
 {
     [Fact]
@@ -140,5 +194,37 @@ public class DelegateToTest
 
         Assert.Equal("manual:5", facade.Format(5));        // 手書きの実装
         Assert.Equal("core-string:x", facade.Format("x")); // 生成で補完され core へ委譲
+    }
+
+    [Fact]
+    public void WhenMethodHandWrittenThenSkippedAndSiblingGenerated()
+    {
+        var facade = new DelegateToManualMethodFacade();
+
+        // 手書きの GetMessage() がそのまま使われる (委譲版は生成されない)
+        Assert.Equal("manual-message", facade.GetMessage());
+
+        // 生成による重複定義が無く、GetMessage の宣言は手書きの 1 つだけ
+        Assert.Single(typeof(DelegateToManualMethodFacade).GetMember(nameof(IDelegateToManualMethod.GetMessage)));
+
+        // 手書きしていない Reset() は生成され core へ委譲される
+        facade.Reset();
+        facade.Reset();
+        Assert.Equal(2, facade.CoreResetCount);
+    }
+
+    [Fact]
+    public void WhenPropertyHandWrittenThenSkippedAndMethodGenerated()
+    {
+        var facade = new DelegateToManualPropertyFacade { Value = 10 };
+
+        // 手書きの Value がそのまま保持される
+        Assert.Equal(10, facade.Value);
+
+        // 生成による重複定義が無く、Value の宣言は手書きの 1 つだけ
+        Assert.Single(typeof(DelegateToManualPropertyFacade).GetMember(nameof(IDelegateToManualProperty.Value)));
+
+        // 委譲が生成されていれば core.Value も 10 になるが、手書きスキップのため core は 0 のまま
+        Assert.Equal("core:0", facade.Describe());
     }
 }
