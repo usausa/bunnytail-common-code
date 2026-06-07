@@ -2,6 +2,7 @@ namespace BunnyTail.CommonCode.Generator;
 
 using System;
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text;
 
 using Microsoft.CodeAnalysis;
@@ -17,6 +18,9 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 {
     private const string GenerateAttributeName = "BunnyTail.CommonCode.GenerateToStringAttribute";
     private const string IgnoreAttributeName = "BunnyTail.CommonCode.IgnoreToStringAttribute";
+    private const string FormatAttributeName = "BunnyTail.CommonCode.ToStringFormatAttribute";
+    private const string MaskAttributeName = "BunnyTail.CommonCode.ToStringMaskAttribute";
+    private const string MaxLengthAttributeName = "BunnyTail.CommonCode.ToStringMaxLengthAttribute";
 
     private const string GenericEnumerableName = "System.Collections.Generic.IEnumerable<T>";
 
@@ -154,10 +158,46 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     private static PropertyModel GetPropertyModel(IPropertySymbol symbol)
     {
         var (hasElements, isNullAssignable) = GetPropertyType(symbol.Type);
+
+        string? format = null;
+        int? maxLength = null;
+        var mask = false;
+        var maskShow = 0;
+        foreach (var attr in symbol.GetAttributes())
+        {
+            switch (attr.AttributeClass?.ToDisplayString())
+            {
+                case FormatAttributeName:
+                    if ((attr.ConstructorArguments.Length > 0) && (attr.ConstructorArguments[0].Value is string formatValue))
+                    {
+                        format = formatValue;
+                    }
+                    break;
+                case MaxLengthAttributeName:
+                    if ((attr.ConstructorArguments.Length > 0) && (attr.ConstructorArguments[0].Value is int maxLengthValue))
+                    {
+                        maxLength = maxLengthValue;
+                    }
+                    break;
+                case MaskAttributeName:
+                    mask = true;
+                    var showArg = attr.NamedArguments.FirstOrDefault(static na => na.Key == "Show");
+                    if (!showArg.Value.IsNull && (showArg.Value.Value is int showValue))
+                    {
+                        maskShow = showValue;
+                    }
+                    break;
+            }
+        }
+
         return new PropertyModel(
             symbol.Name,
             hasElements,
-            isNullAssignable);
+            isNullAssignable,
+            format,
+            maxLength,
+            mask,
+            maskShow);
     }
 
     private static (bool HasElements, bool IsNullAssignable) GetPropertyType(ITypeSymbol typeSymbol)
@@ -320,6 +360,10 @@ public sealed class ToStringGenerator : IIncrementalGenerator
                     builder.EndScope();
                 }
             }
+            else if (property.Mask || property.MaxLength.HasValue)
+            {
+                BuildAppendMasked(builder, property, options.NullLiteral);
+            }
             else
             {
                 if (property.IsNullAssignable)
@@ -334,7 +378,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
                             .NewLine();
                         builder.BeginScope();
 
-                        BuildAppendProperty(builder, property.Name);
+                        BuildAppendProperty(builder, property.Name, property.Format);
 
                         builder.EndScope();
                         builder
@@ -349,12 +393,12 @@ public sealed class ToStringGenerator : IIncrementalGenerator
                     }
                     else
                     {
-                        BuildAppendProperty(builder, property.Name);
+                        BuildAppendProperty(builder, property.Name, property.Format);
                     }
                 }
                 else
                 {
-                    BuildAppendProperty(builder, property.Name);
+                    BuildAppendProperty(builder, property.Name, property.Format);
                 }
             }
         }
@@ -379,16 +423,119 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         }
     }
 
-    private static void BuildAppendProperty(SourceBuilder builder, string name)
+    private static void BuildAppendProperty(SourceBuilder builder, string name, string? format)
     {
         builder
             .Indent()
             .Append("handler.AppendFormatted(")
             .Append("this.")
-            .Append(name)
+            .Append(name);
+        if (!String.IsNullOrEmpty(format))
+        {
+            builder
+                .Append(", \"")
+                .Append(EscapeString(format!))
+                .Append("\"");
+        }
+        builder
             .Append(");")
             .NewLine();
     }
+
+    private static void BuildAppendMasked(SourceBuilder builder, PropertyModel property, string? nullLiteral)
+    {
+        builder.BeginScope();
+
+        builder.Indent().Append("var value = ");
+        if (!property.Mask && !String.IsNullOrEmpty(property.Format))
+        {
+            builder
+                .Append("this.")
+                .Append(property.Name)
+                .Append(" is global::System.IFormattable formattable ? formattable.ToString(\"")
+                .Append(EscapeString(property.Format!))
+                .Append("\", null) : this.")
+                .Append(property.Name)
+                .Append(property.IsNullAssignable ? "?.ToString();" : ".ToString();")
+                .NewLine();
+        }
+        else
+        {
+            builder
+                .Append("this.")
+                .Append(property.Name)
+                .Append(property.IsNullAssignable ? "?.ToString();" : ".ToString();")
+                .NewLine();
+        }
+
+        builder.Indent().Append("if (value is null)").NewLine();
+        builder.BeginScope();
+        if (!String.IsNullOrEmpty(nullLiteral))
+        {
+            BuildAppendLiteral(builder, nullLiteral!);
+        }
+        builder.EndScope();
+        builder.Indent().Append("else").NewLine();
+        builder.BeginScope();
+
+        if (property.Mask)
+        {
+            if (property.MaskShow > 0)
+            {
+                builder
+                    .Indent()
+                    .Append("if (value.Length > ")
+                    .Append(property.MaskShow.ToString(CultureInfo.InvariantCulture))
+                    .Append(")")
+                    .NewLine();
+                builder.BeginScope();
+                BuildAppendLiteral(builder, "***");
+                builder
+                    .Indent()
+                    .Append("handler.AppendFormatted(value.Substring(value.Length - ")
+                    .Append(property.MaskShow.ToString(CultureInfo.InvariantCulture))
+                    .Append("));")
+                    .NewLine();
+                builder.EndScope();
+                builder.Indent().Append("else").NewLine();
+                builder.BeginScope();
+                BuildAppendLiteral(builder, "***");
+                builder.EndScope();
+            }
+            else
+            {
+                BuildAppendLiteral(builder, "***");
+            }
+        }
+        else
+        {
+            builder
+                .Indent()
+                .Append("if (value.Length > ")
+                .Append(property.MaxLength!.Value.ToString(CultureInfo.InvariantCulture))
+                .Append(")")
+                .NewLine();
+            builder.BeginScope();
+            builder
+                .Indent()
+                .Append("handler.AppendFormatted(value.Substring(0, ")
+                .Append(property.MaxLength!.Value.ToString(CultureInfo.InvariantCulture))
+                .Append("));")
+                .NewLine();
+            builder.EndScope();
+            builder.Indent().Append("else").NewLine();
+            builder.BeginScope();
+            builder.Indent().Append("handler.AppendFormatted(value);").NewLine();
+            builder.EndScope();
+        }
+
+        builder.EndScope();
+
+        builder.EndScope();
+    }
+
+    private static string EscapeString(string value) =>
+        value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
     private static void BuildAppendLiteral(SourceBuilder builder, string literal)
     {
@@ -490,5 +637,9 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     private sealed record PropertyModel(
         string Name,
         bool HasElements,
-        bool IsNullAssignable);
+        bool IsNullAssignable,
+        string? Format,
+        int? MaxLength,
+        bool Mask,
+        int MaskShow);
 }

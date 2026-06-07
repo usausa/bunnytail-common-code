@@ -41,6 +41,37 @@ var str = data.ToString();
 Assert.Equal("{ Id = 123, Name = xyz, Values = [1, 2] }", str);
 ```
 
+### Property attributes
+
+| Attribute | Description |
+|---|---|
+| `[IgnoreToString]` | Exclude the property from output |
+| `[ToStringFormat(format)]` | Apply a format string (`AppendFormatted(value, format)`) |
+| `[ToStringMaxLength(length)]` | Truncate the stringified value to the given length |
+| `[ToStringMask]` / `[ToStringMask(Show = n)]` | Mask the value; with `Show`, reveal only the last `n` characters |
+
+When combined, the priority is `Mask` > `MaxLength` > `Format` (`MaxLength` and `Format` can be combined). These attributes apply to scalar properties; collection-valued properties are emitted as before. `null` values follow the configured null literal.
+
+```csharp
+[GenerateToString]
+public partial class User
+{
+    public int Id { get; set; }
+
+    [ToStringMask]
+    public string Password { get; set; } = default!;     // Password = ***
+
+    [ToStringMask(Show = 2)]
+    public string Token { get; set; } = default!;        // Token = ***34
+
+    [ToStringFormat("yyyy-MM-dd")]
+    public DateTime BirthDate { get; set; }              // BirthDate = 2020-01-02
+
+    [ToStringMaxLength(20)]
+    public string Description { get; set; } = default!;  // truncated to 20 chars
+}
+```
+
 ### Diagnostics
 
 | ID | Severity | Description |

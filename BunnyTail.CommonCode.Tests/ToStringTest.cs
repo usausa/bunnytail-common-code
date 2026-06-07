@@ -78,6 +78,43 @@ public partial class ToStringHiddenDerived : ToStringHiddenBase
     public string Label { get; init; } = default!;
 }
 
+[GenerateToString]
+public partial class ToStringMaskData
+{
+    [ToStringMask]
+    public string Password { get; set; } = default!;
+
+    [ToStringMask(Show = 2)]
+    public string Token { get; set; } = default!;
+}
+
+[GenerateToString]
+public partial class ToStringFormatData
+{
+    [ToStringFormat("000")]
+    public int Code { get; set; }
+
+    [ToStringFormat("X4")]
+    public int Hex { get; set; }
+}
+
+[GenerateToString]
+public partial class ToStringMaxLengthData
+{
+    [ToStringMaxLength(3)]
+    public string Description { get; set; } = default!;
+
+    public string Name { get; set; } = default!;
+}
+
+[GenerateToString]
+public partial class ToStringFormatMaxLengthData
+{
+    [ToStringFormat("000000")]
+    [ToStringMaxLength(3)]
+    public int Number { get; set; }
+}
+
 public class ToStringTest
 {
     [Fact]
@@ -141,5 +178,51 @@ public class ToStringTest
         Assert.Equal(
             "{ Label = L }",
             new ToStringHiddenDerived { Token = 1, Label = "L" }.ToString());
+    }
+
+    [Fact]
+    public void TestMask()
+    {
+        Assert.Equal(
+            "{ Password = ***, Token = ***34 }",
+            new ToStringMaskData { Password = "secret", Token = "abcd1234" }.ToString());
+        // Show 以下の長さは末尾を見せず *** のみ
+        Assert.Equal(
+            "{ Password = ***, Token = *** }",
+            new ToStringMaskData { Password = "x", Token = "ab" }.ToString());
+        Assert.Equal(
+            "{ Password = null, Token = null }",
+            new ToStringMaskData().ToString());
+    }
+
+    [Fact]
+    public void TestFormat()
+    {
+        Assert.Equal(
+            "{ Code = 007, Hex = 00FF }",
+            new ToStringFormatData { Code = 7, Hex = 255 }.ToString());
+    }
+
+    [Fact]
+    public void TestMaxLength()
+    {
+        Assert.Equal(
+            "{ Description = abc, Name = x }",
+            new ToStringMaxLengthData { Description = "abcdef", Name = "x" }.ToString());
+        Assert.Equal(
+            "{ Description = ab, Name = y }",
+            new ToStringMaxLengthData { Description = "ab", Name = "y" }.ToString());
+        Assert.Equal(
+            "{ Description = null, Name = z }",
+            new ToStringMaxLengthData { Name = "z" }.ToString());
+    }
+
+    [Fact]
+    public void TestFormatWithMaxLength()
+    {
+        // 書式適用後に切り詰め: 7 -> "000007" -> "000"
+        Assert.Equal(
+            "{ Number = 000 }",
+            new ToStringFormatMaxLengthData { Number = 7 }.ToString());
     }
 }
