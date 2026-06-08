@@ -3,9 +3,9 @@ namespace BunnyTail.CommonCode;
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct)]
 public sealed class GenerateEqualityAttribute : Attribute
 {
-    // == / != 演算子を生成するか (既定: true)
+    // Generate == / != operator
     public bool GenerateOperators { get; set; } = true;
 
-    // コレクション要素を SequenceEqual で比較するか (既定: false)
+    // Compare collection elements using SequenceEqual
     public bool DeepCollectionEquality { get; set; }
 }

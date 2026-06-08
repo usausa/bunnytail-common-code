@@ -15,6 +15,7 @@ public sealed partial class EqualityTaggedData
 {
 #pragma warning disable CA1819
     public string Name { get; init; } = default!;
+
     public string[] Tags { get; init; } = [];
 #pragma warning restore CA1819
 }
@@ -36,14 +37,14 @@ public class EqualityShadowBase
     public int Value { get; init; }
 }
 
-// 派生型が基底プロパティを new で隠蔽 (型も変更) しても、最派生の宣言だけを比較する
+// Even when a derived type hides a base property with new (also changing the type), only the most-derived declaration is compared
 [GenerateEquality]
 public partial class EqualityShadowDerived : EqualityShadowBase
 {
     public new string Value { get; init; } = default!;
 }
 
-// インデクサを持つ型でも、インデクサは比較対象外で通常プロパティのみ比較する
+// Even for a type with an indexer, the indexer is excluded and only regular properties are compared
 [GenerateEquality]
 public partial class EqualityIndexedData
 {
@@ -63,8 +64,8 @@ public class EqualityHiddenBase
     public string Token { get; init; } = default!;
 }
 
-// 派生が public new(別型) を IgnoreEquality で隠蔽。
-// this.Token は派生(int)に束縛され基底 public(string) に到達できないため、Token は比較対象外 (仕様: 到達可能な最派生のみ対象)。
+// The derived type hides the public member with new (different type) marked IgnoreEquality.
+// Since this.Token binds to the derived one (int) and cannot reach the base public one (string), Token is excluded (spec: only the reachable most-derived member is targeted).
 [GenerateEquality]
 public partial class EqualityHiddenDerived : EqualityHiddenBase
 {
@@ -79,47 +80,81 @@ public class EqualityTest
     [Fact]
     public void WhenSameValuesThenEquals()
     {
+        // Arrange
         var a = new EqualityMoneyData { Amount = 1.5m, Currency = "USD" };
         var b = new EqualityMoneyData { Amount = 1.5m, Currency = "USD" };
-        Assert.True(a.Equals(b));
+
+        // Act
+        var result = a.Equals(b);
+
+        // Assert
+        Assert.True(result);
     }
 
     [Fact]
     public void WhenDifferentValuesThenNotEquals()
     {
+        // Arrange
         var a = new EqualityMoneyData { Amount = 1.5m, Currency = "USD" };
         var b = new EqualityMoneyData { Amount = 2.0m, Currency = "USD" };
-        Assert.False(a.Equals(b));
+
+        // Act
+        var result = a.Equals(b);
+
+        // Assert
+        Assert.False(result);
     }
 
     [Fact]
     public void WhenIgnoredPropertyDiffersThenEquals()
     {
+        // Arrange
         var a = new EqualityMoneyData { Amount = 1m, Currency = "USD", CapturedAt = DateTime.MinValue };
         var b = new EqualityMoneyData { Amount = 1m, Currency = "USD", CapturedAt = DateTime.MaxValue };
-        Assert.True(a.Equals(b));
+
+        // Act
+        var result = a.Equals(b);
+
+        // Assert
+        Assert.True(result);
     }
 
     [Fact]
     public void WhenSameReferenceThenEquals()
     {
+        // Arrange
         var a = new EqualityMoneyData { Amount = 1m, Currency = "USD" };
-        Assert.True(a.Equals(a));
+
+        // Act
+        var result = a.Equals(a);
+
+        // Assert
+        Assert.True(result);
     }
 
     [Fact]
     public void GetHashCodeConsistentWithEquals()
     {
+        // Arrange
         var a = new EqualityMoneyData { Amount = 1.5m, Currency = "USD" };
         var b = new EqualityMoneyData { Amount = 1.5m, Currency = "USD" };
-        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+
+        // Act
+        var hashA = a.GetHashCode();
+        var hashB = b.GetHashCode();
+
+        // Assert
+        Assert.Equal(hashA, hashB);
     }
 
     [Fact]
     public void OperatorEqualWhenSameValues()
     {
+        // Arrange
         var a = new EqualityTaggedData { Name = "x", Tags = ["a", "b"] };
         var b = new EqualityTaggedData { Name = "x", Tags = ["a", "b"] };
+
+        // Act & Assert
         Assert.True(a == b);
         Assert.False(a != b);
     }
@@ -127,40 +162,56 @@ public class EqualityTest
     [Fact]
     public void OperatorNotEqualWhenDifferentTags()
     {
+        // Arrange
         var a = new EqualityTaggedData { Name = "x", Tags = ["a"] };
         var b = new EqualityTaggedData { Name = "x", Tags = ["b"] };
-        Assert.True(a != b);
+
+        // Act
+        var result = a != b;
+
+        // Assert
+        Assert.True(result);
     }
 
     [Fact]
     public void DeepCollectionEqualityWithNullTags()
     {
+        // Arrange
         var a = new EqualityTaggedData { Name = "x", Tags = null! };
         var b = new EqualityTaggedData { Name = "x", Tags = null! };
-        Assert.True(a == b);
+
+        // Act
+        var result = a == b;
+
+        // Assert
+        Assert.True(result);
     }
 
     [Fact]
     public void WhenInheritedThenComparesOwnAndInheritedMembers()
     {
+        // Arrange
         var a = new EqualityMemberAccount { Id = 1, Name = "Alice" };
         var b = new EqualityMemberAccount { Id = 1, Name = "Alice" };
         var differentInherited = new EqualityMemberAccount { Id = 2, Name = "Alice" };
         var differentOwn = new EqualityMemberAccount { Id = 1, Name = "Bob" };
 
+        // Act & Assert
         Assert.True(a.Equals(b));
-        Assert.False(a.Equals(differentInherited)); // 継承した Id の差分を検出 (フラット比較)
-        Assert.False(a.Equals(differentOwn));       // 自型 Name の差分を検出
+        Assert.False(a.Equals(differentInherited)); // Detects difference in inherited Id (flat comparison)
+        Assert.False(a.Equals(differentOwn));       // Detects difference in own Name
         Assert.Equal(a.GetHashCode(), b.GetHashCode());
     }
 
     [Fact]
     public void WhenBasePropertyShadowedThenUsesDerivedDeclaration()
     {
+        // Arrange
         var a = new EqualityShadowDerived { Value = "x" };
         var b = new EqualityShadowDerived { Value = "x" };
         var c = new EqualityShadowDerived { Value = "y" };
 
+        // Act & Assert
         Assert.True(a.Equals(b));
         Assert.False(a.Equals(c));
     }
@@ -168,23 +219,30 @@ public class EqualityTest
     [Fact]
     public void WhenTypeHasIndexerThenIndexerIsExcluded()
     {
+        // Arrange
         var a = new EqualityIndexedData { Name = "x" };
         var b = new EqualityIndexedData { Name = "x" };
         a["k"] = "1";
-        b["k"] = "2"; // インデクサの内容が違っても比較対象外
+        b["k"] = "2"; // Indexer content differs but is excluded from comparison
 
-        Assert.True(a.Equals(b));
+        // Act
+        var result = a.Equals(b);
+
+        // Assert
+        Assert.True(result);
     }
 
     [Fact]
     public void WhenBasePublicHiddenByIgnoredNewThenNameIsExcluded()
     {
-        // この型がコンパイルできること自体が回帰防止 (採用後登録に変えると EqualityComparer<string> へ int を渡しコンパイル不能)
+        // Arrange
+        // The fact that this type compiles is itself a regression guard (changing to opt-in registration would pass int to EqualityComparer<string> and fail to compile)
         var a = new EqualityHiddenDerived { Token = 1, Label = "L" };
         var b = new EqualityHiddenDerived { Token = 2, Label = "L" };
         var c = new EqualityHiddenDerived { Token = 1, Label = "M" };
 
-        Assert.True(a.Equals(b));  // 隠蔽された Token は比較対象外
-        Assert.False(a.Equals(c)); // Label で判定
+        // Act & Assert
+        Assert.True(a.Equals(b));  // Hidden Token is excluded from comparison
+        Assert.False(a.Equals(c)); // Determined by Label
     }
 }

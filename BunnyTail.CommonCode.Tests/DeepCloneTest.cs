@@ -31,17 +31,17 @@ public partial class DeepCloneDocumentData : IDeepCloneable<DeepCloneDocumentDat
 [GenerateDeepClone]
 public partial class DeepCloneProfileData : IDeepCloneable<DeepCloneProfileData>
 {
-    // init 専用: オブジェクト初期化子で複製される
+    // init-only: cloned via the object initializer
     public string DisplayName { get; init; } = default!;
 
-    // set 可能: 代入で複製される
+    // settable: cloned via assignment
     public int Level { get; set; }
 
-    // get-only (計算プロパティ): 代入不能なので複製対象外
+    // get-only (computed property): not assignable, so excluded from cloning
     public string Badge => $"{DisplayName}#{Level}";
 }
 
-// インデクサは複製対象外 (clone.<Name> で代入できないため)
+// The indexer is excluded from cloning (cannot be assigned via clone.<Name>)
 [GenerateDeepClone]
 public partial class DeepCloneIndexedData : IDeepCloneable<DeepCloneIndexedData>
 {
@@ -61,6 +61,7 @@ public class DeepCloneTest
     [Fact]
     public void WhenClonedThenIndependentCopy()
     {
+        // Arrange
         var original = new DeepCloneDocumentData
         {
             Title = "Hello",
@@ -71,8 +72,10 @@ public class DeepCloneTest
             CacheKey = 42
         };
 
+        // Act
         var clone = original.DeepClone();
 
+        // Assert
         Assert.Equal(original.Title, clone.Title);
         Assert.Equal(original.Tags, clone.Tags);
         Assert.Equal(original.Scores, clone.Scores);
@@ -82,97 +85,128 @@ public class DeepCloneTest
     [Fact]
     public void WhenTagsModifiedThenOriginalUnchanged()
     {
+        // Arrange
         var original = new DeepCloneDocumentData { Tags = ["a", "b"] };
         var clone = original.DeepClone();
 
+        // Act
         clone.Tags.Add("c");
 
-        Assert.Equal(2, original.Tags.Count);
+        // Assert
+        Assert.Equal(2, original.Tags.Count); // Changes to the clone do not affect the original
         Assert.Equal(3, clone.Tags.Count);
     }
 
     [Fact]
     public void WhenScoresModifiedThenOriginalUnchanged()
     {
+        // Arrange
         var original = new DeepCloneDocumentData { Scores = [1, 2] };
         var clone = original.DeepClone();
 
+        // Act
         clone.Scores[0] = 99;
 
-        Assert.Equal(1, original.Scores[0]);
+        // Assert
+        Assert.Equal(1, original.Scores[0]); // Arrays are also cloned independently
     }
 
     [Fact]
     public void WhenOwnerModifiedThenOriginalUnchanged()
     {
+        // Arrange
         var original = new DeepCloneDocumentData { Owner = new DeepCloneAuthorData { Name = "Alice" } };
         var clone = original.DeepClone();
 
+        // Act
         clone.Owner.Name = "Bob";
 
-        Assert.Equal("Alice", original.Owner.Name);
+        // Assert
+        Assert.Equal("Alice", original.Owner.Name); // Nested reference types are also deeply cloned
     }
 
     [Fact]
     public void WhenShallowClonePropModifiedThenBothSeeChange()
     {
+        // Arrange
         var sharedRef = new object();
         var original = new DeepCloneDocumentData { ExtraRef = sharedRef };
+
+        // Act
         var clone = original.DeepClone();
 
-        Assert.Same(sharedRef, clone.ExtraRef);
+        // Assert
+        Assert.Same(sharedRef, clone.ExtraRef); // ShallowClone shares the reference
     }
 
     [Fact]
     public void WhenCloneIgnorePropThenNotCopied()
     {
+        // Arrange
         var original = new DeepCloneDocumentData { CacheKey = 42 };
+
+        // Act
         var clone = original.DeepClone();
 
-        Assert.Equal(0, clone.CacheKey);
+        // Assert
+        Assert.Equal(0, clone.CacheKey); // IgnoreClone is not cloned and stays at its default value
     }
 
     [Fact]
     public void WhenNullTagsThenNullInClone()
     {
+        // Arrange
         var original = new DeepCloneDocumentData { Tags = null! };
+
+        // Act
         var clone = original.DeepClone();
 
-        Assert.Null(clone.Tags);
+        // Assert
+        Assert.Null(clone.Tags); // A null collection is cloned as null
     }
 
     [Fact]
     public void WhenNullOwnerThenNullInClone()
     {
+        // Arrange
         var original = new DeepCloneDocumentData { Owner = null! };
+
+        // Act
         var clone = original.DeepClone();
 
-        Assert.Null(clone.Owner);
+        // Assert
+        Assert.Null(clone.Owner); // A null reference is cloned as null
     }
 
     [Fact]
     public void WhenInitAndGetOnlyPropertiesThenAssignableAreCloned()
     {
+        // Arrange
         var original = new DeepCloneProfileData { DisplayName = "Alice", Level = 7 };
 
+        // Act
         var clone = original.DeepClone();
 
-        Assert.Equal("Alice", clone.DisplayName); // init はオブジェクト初期化子で複製
-        Assert.Equal(7, clone.Level);             // set は代入で複製
-        Assert.Equal("Alice#7", clone.Badge);     // get-only は複製対象外だが値から再計算される
+        // Assert
+        Assert.Equal("Alice", clone.DisplayName); // init is cloned via the object initializer
+        Assert.Equal(7, clone.Level);             // set is cloned via assignment
+        Assert.Equal("Alice#7", clone.Badge);     // get-only is excluded from cloning but recomputed from the values
     }
 
     [Fact]
     public void WhenTypeHasIndexerThenIndexerIsExcluded()
     {
+        // Arrange
         var original = new DeepCloneIndexedData
         {
             Title = "t",
             ["k"] = "v"
         };
 
+        // Act
         var clone = original.DeepClone();
 
-        Assert.Equal("t", clone.Title); // インデクサは対象外で Title のみ複製
+        // Assert
+        Assert.Equal("t", clone.Title); // The indexer is excluded and only Title is cloned
     }
 }

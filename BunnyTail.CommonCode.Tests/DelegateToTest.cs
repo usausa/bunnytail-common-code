@@ -42,7 +42,7 @@ public sealed class DelegateToStorageCore : IDelegateToReader, IDelegateToWriter
     public void Write(string value) => content = value;
 }
 
-// 委譲元クラス自身はインターフェースを実装していない (メンバ型が実装するインターフェース経由で解決されることを検証)
+// The delegating class itself does not implement the interface (verifies resolution via interfaces implemented by the member type)
 [GenerateDelegateTo]
 public partial class DelegateToStorageFacade
 {
@@ -50,7 +50,7 @@ public partial class DelegateToStorageFacade
     private readonly DelegateToStorageCore core = new();
 }
 
-// InterfaceType で委譲対象を限定するケース
+// Case where the delegation target is restricted by InterfaceType
 [GenerateDelegateTo]
 public partial class DelegateToReaderFacade
 {
@@ -72,7 +72,7 @@ public sealed class DelegateToFormatCore : IDelegateToFormatService
     public string Format(string value) => $"core-string:{value}";
 }
 
-// 手書きの Format(int) があっても、別オーバーロード Format(string) は生成で補完される
+// Even with a hand-written Format(int), the other overload Format(string) is filled in by generation
 [GenerateDelegateTo]
 public partial class DelegateToFormatFacade : IDelegateToFormatService
 {
@@ -98,8 +98,8 @@ public sealed class DelegateToManualMethodCore : IDelegateToManualMethod
     public void Reset() => ResetCount++;
 }
 
-// オーバーロードの無い単一メソッド GetMessage() を手書きした場合、その委譲は生成されず、
-// 手書きしていない Reset() のみ生成されることを検証する
+// When a single non-overloaded method GetMessage() is hand-written, its delegation is not generated,
+// and only the non-hand-written Reset() is generated
 [GenerateDelegateTo]
 public partial class DelegateToManualMethodFacade : IDelegateToManualMethod
 {
@@ -125,14 +125,14 @@ public sealed class DelegateToManualPropertyCore : IDelegateToManualProperty
     public string Describe() => $"core:{Value}";
 }
 
-// Value プロパティを手書きした場合、その委譲は生成されず、手書きしていない Describe() のみ生成されることを検証する
+// When the Value property is hand-written, its delegation is not generated, and only the non-hand-written Describe() is generated
 [GenerateDelegateTo]
 public partial class DelegateToManualPropertyFacade : IDelegateToManualProperty
 {
     [DelegateTo]
     private readonly DelegateToManualPropertyCore core = new();
 
-    // 手書きの Value。委譲が生成された場合は core.Value へ転送されるが、手書きのため core とは独立している
+    // Hand-written Value. If delegation were generated it would forward to core.Value, but being hand-written it is independent of core
     public int Value { get; set; }
 }
 
@@ -141,90 +141,140 @@ public class DelegateToTest
     [Fact]
     public void WhenGetMessageCalledThenDelegateToInner()
     {
+        // Arrange
         var svc = new DelegateToLoggingService();
-        Assert.Equal("Hello-0", svc.GetMessage());
+
+        // Act
+        var result = svc.GetMessage();
+
+        // Assert
+        Assert.Equal("Hello-0", result); // Delegated to the inner member
     }
 
     [Fact]
     public void WhenCountSetThenDelegatesToInner()
     {
+        // Arrange
         var svc = new DelegateToLoggingService { Count = 5 };
-        Assert.Equal("Hello-5", svc.GetMessage());
+
+        // Act
+        var result = svc.GetMessage();
+
+        // Assert
+        Assert.Equal("Hello-5", result); // Property setting is also delegated to the inner member
     }
 
     [Fact]
     public void WhenResetCalledThenCountReturnsZero()
     {
+        // Arrange
         var svc = new DelegateToLoggingService { Count = 10 };
+
+        // Act
         svc.Reset();
-        Assert.Equal(0, svc.Count);
+
+        // Assert
+        Assert.Equal(0, svc.Count); // Method calls are also delegated
     }
 
     [Fact]
     public void WhenUsedAsInterfaceThenWorksCorrectly()
     {
+        // Arrange
         var svc = new DelegateToLoggingService { Count = 3 };
-        Assert.Equal("Hello-3", svc.GetMessage());
+
+        // Act
+        var message = svc.GetMessage();
         svc.Reset();
+
+        // Assert
+        Assert.Equal("Hello-3", message);
         Assert.Equal(0, svc.Count);
     }
 
     [Fact]
     public void WhenConcreteFieldThenDelegatesAllImplementedInterfaces()
     {
+        // Arrange
         var facade = new DelegateToStorageFacade();
+
+        // Act
         facade.Write("payload");
-        Assert.Equal("payload", facade.Read());
+
+        // Assert
+        Assert.Equal("payload", facade.Read()); // Delegated to all interfaces implemented by the member type
     }
 
     [Fact]
     public void WhenInterfaceTypeSpecifiedThenDelegatesOnlyThatInterface()
     {
+        // Arrange
         var type = typeof(DelegateToReaderFacade);
-        Assert.NotNull(type.GetMethod(nameof(IDelegateToReader.Read)));
-        Assert.Null(type.GetMethod(nameof(IDelegateToWriter.Write)));
+
+        // Act
+        var readMethod = type.GetMethod(nameof(IDelegateToReader.Read));
+        var writeMethod = type.GetMethod(nameof(IDelegateToWriter.Write));
+
+        // Assert
+        Assert.NotNull(readMethod); // Only IDelegateToReader specified by InterfaceType is generated
+        Assert.Null(writeMethod);   // The unspecified IDelegateToWriter is not generated
     }
 
     [Fact]
     public void WhenOverloadHandWrittenThenOtherOverloadIsGenerated()
     {
-        // DelegateToFormatFacade : IDelegateToFormatService がコンパイルできる時点で、
-        // 手書きの Format(int) に加えて Format(string) が生成されインターフェース実装が完結している
+        // Arrange
+        // The fact that DelegateToFormatFacade : IDelegateToFormatService compiles means that,
+        // in addition to the hand-written Format(int), Format(string) is generated and the interface implementation is complete
         var facade = new DelegateToFormatFacade();
 
-        Assert.Equal("manual:5", facade.Format(5));        // 手書きの実装
-        Assert.Equal("core-string:x", facade.Format("x")); // 生成で補完され core へ委譲
+        // Act
+        var manual = facade.Format(5);
+        var generated = facade.Format("x");
+
+        // Assert
+        Assert.Equal("manual:5", manual);          // Hand-written implementation
+        Assert.Equal("core-string:x", generated);  // Filled in by generation and delegated to core
     }
 
     [Fact]
     public void WhenMethodHandWrittenThenSkippedAndSiblingGenerated()
     {
+        // Arrange
         var facade = new DelegateToManualMethodFacade();
 
-        // 手書きの GetMessage() がそのまま使われる (委譲版は生成されない)
+        // Act
+        facade.Reset();
+        facade.Reset();
+
+        // Assert
+        // The hand-written GetMessage() is used as is (the delegating version is not generated)
         Assert.Equal("manual-message", facade.GetMessage());
 
-        // 生成による重複定義が無く、GetMessage の宣言は手書きの 1 つだけ
+        // No duplicate definition from generation; there is only the single hand-written GetMessage declaration
         Assert.Single(typeof(DelegateToManualMethodFacade).GetMember(nameof(IDelegateToManualMethod.GetMessage)));
 
-        // 手書きしていない Reset() は生成され core へ委譲される
-        facade.Reset();
-        facade.Reset();
+        // The non-hand-written Reset() is generated and delegated to core
         Assert.Equal(2, facade.CoreResetCount);
     }
 
     [Fact]
     public void WhenPropertyHandWrittenThenSkippedAndMethodGenerated()
     {
+        // Arrange
         var facade = new DelegateToManualPropertyFacade { Value = 10 };
 
-        // 手書きの Value がそのまま保持される
+        // Act
+        var describe = facade.Describe();
+
+        // Assert
+        // The hand-written Value is retained as is
         Assert.Equal(10, facade.Value);
 
-        // 生成による重複定義が無く、Value の宣言は手書きの 1 つだけ
+        // No duplicate definition from generation; there is only the single hand-written Value declaration
         Assert.Single(typeof(DelegateToManualPropertyFacade).GetMember(nameof(IDelegateToManualProperty.Value)));
 
-        // 委譲が生成されていれば core.Value も 10 になるが、手書きスキップのため core は 0 のまま
-        Assert.Equal("core:0", facade.Describe());
+        // If delegation were generated core.Value would also be 10, but because it is skipped for hand-written members core stays 0
+        Assert.Equal("core:0", describe);
     }
 }

@@ -41,14 +41,14 @@ public class ToStringShadowBase
     public int Value { get; init; }
 }
 
-// 派生型が基底プロパティを new で隠蔽しても、最派生の宣言のみ出力する (二重出力しない)
+// Even when a derived type hides a base property with new, only the most-derived declaration is output (no duplicate output)
 [GenerateToString]
 public partial class ToStringShadowDerived : ToStringShadowBase
 {
     public new string Value { get; init; } = default!;
 }
 
-// インデクサは出力対象外
+// The indexer is excluded from output
 [GenerateToString]
 public partial class ToStringIndexedData
 {
@@ -68,7 +68,7 @@ public class ToStringHiddenBase
     public string Token { get; init; } = default!;
 }
 
-// 派生が public new を IgnoreToString で隠蔽。this.Token は派生に束縛され基底 public に到達できないため出力対象外
+// The derived type hides the public member with new marked IgnoreToString. Since this.Token binds to the derived one and cannot reach the base public one, it is excluded from output
 [GenerateToString]
 public partial class ToStringHiddenDerived : ToStringHiddenBase
 {
@@ -120,109 +120,158 @@ public class ToStringTest
     [Fact]
     public void TestBasic()
     {
-        Assert.Equal(
-            "{ Id = 123, Name = xyz, IntValues = [1, 2], StringValues = [a, null] }",
-            new ToStringData { Id = 123, Name = "xyz", IntValues = [1, 2], StringValues = ["a", null] }.ToString());
-        Assert.Equal(
-            "{ Id = 123, Name = xyz, IntValues = null, StringValues = null }",
-            new ToStringData { Id = 123, Name = "xyz" }.ToString());
+        // Arrange
+        var withValues = new ToStringData { Id = 123, Name = "xyz", IntValues = [1, 2], StringValues = ["a", null] };
+        var withNulls = new ToStringData { Id = 123, Name = "xyz" };
+
+        // Act
+        var withValuesText = withValues.ToString();
+        var withNullsText = withNulls.ToString();
+
+        // Assert
+        Assert.Equal("{ Id = 123, Name = xyz, IntValues = [1, 2], StringValues = [a, null] }", withValuesText); // Array elements are expanded and null is also output
+        Assert.Equal("{ Id = 123, Name = xyz, IntValues = null, StringValues = null }", withNullsText);          // A null array is output as null
     }
 
     [Fact]
     public void TestGeneric()
     {
-        Assert.Equal(
-            "{ Value = 123 }",
-            new ToStringGenericData<int> { Value = 123 }.ToString());
-        Assert.Equal(
-            "{ Value = xyz }",
-            new ToStringGenericData<string> { Value = "xyz" }.ToString());
-        Assert.Equal(
-            "{ Value = null }",
-            new ToStringGenericData<string?> { Value = null }.ToString());
+        // Arrange
+        var intData = new ToStringGenericData<int> { Value = 123 };
+        var stringData = new ToStringGenericData<string> { Value = "xyz" };
+        var nullData = new ToStringGenericData<string?> { Value = null };
+
+        // Act
+        var intText = intData.ToString();
+        var stringText = stringData.ToString();
+        var nullText = nullData.ToString();
+
+        // Assert
+        Assert.Equal("{ Value = 123 }", intText);
+        Assert.Equal("{ Value = xyz }", stringText);
+        Assert.Equal("{ Value = null }", nullText);
     }
 
     [Fact]
     public void TestInnerClass()
     {
-        Assert.Equal(
-            "{ Id = 456, Name = inner }",
-            new ToStringOuterData.InnerData { Id = 456, Name = "inner" }.ToString());
+        // Arrange
+        var data = new ToStringOuterData.InnerData { Id = 456, Name = "inner" };
+
+        // Act
+        var text = data.ToString();
+
+        // Assert
+        Assert.Equal("{ Id = 456, Name = inner }", text); // Generated even for nested types
     }
 
     [Fact]
     public void TestShadowedProperty()
     {
-        // 隠蔽された基底 int Value は出力されず、最派生 string Value のみ (二重出力しない)
-        Assert.Equal(
-            "{ Value = x }",
-            new ToStringShadowDerived { Value = "x" }.ToString());
+        // Arrange
+        var data = new ToStringShadowDerived { Value = "x" };
+
+        // Act
+        var text = data.ToString();
+
+        // Assert
+        // The hidden base int Value is not output, only the most-derived string Value (no duplicate output)
+        Assert.Equal("{ Value = x }", text);
     }
 
     [Fact]
     public void TestIndexerExcluded()
     {
+        // Arrange
         var data = new ToStringIndexedData
         {
             Name = "x",
             ["k"] = "v"
         };
 
-        Assert.Equal("{ Name = x }", data.ToString());
+        // Act
+        var text = data.ToString();
+
+        // Assert
+        Assert.Equal("{ Name = x }", text); // The indexer is excluded from output
     }
 
     [Fact]
     public void TestHiddenPropertyExcluded()
     {
-        // 隠蔽 + IgnoreToString の Token は出力されず、Label のみ
-        Assert.Equal(
-            "{ Label = L }",
-            new ToStringHiddenDerived { Token = 1, Label = "L" }.ToString());
+        // Arrange
+        var data = new ToStringHiddenDerived { Token = 1, Label = "L" };
+
+        // Act
+        var text = data.ToString();
+
+        // Assert
+        // The hidden + IgnoreToString Token is not output, only Label
+        Assert.Equal("{ Label = L }", text);
     }
 
     [Fact]
     public void TestMask()
     {
-        Assert.Equal(
-            "{ Password = ***, Token = ***34 }",
-            new ToStringMaskData { Password = "secret", Token = "abcd1234" }.ToString());
-        // Show 以下の長さは末尾を見せず *** のみ
-        Assert.Equal(
-            "{ Password = ***, Token = *** }",
-            new ToStringMaskData { Password = "x", Token = "ab" }.ToString());
-        Assert.Equal(
-            "{ Password = null, Token = null }",
-            new ToStringMaskData().ToString());
+        // Arrange
+        var masked = new ToStringMaskData { Password = "secret", Token = "abcd1234" };
+        var shortValue = new ToStringMaskData { Password = "x", Token = "ab" };
+        var nullValue = new ToStringMaskData();
+
+        // Act
+        var maskedText = masked.ToString();
+        var shortText = shortValue.ToString();
+        var nullText = nullValue.ToString();
+
+        // Assert
+        Assert.Equal("{ Password = ***, Token = ***34 }", maskedText); // Shows only the trailing characters specified by Show
+        Assert.Equal("{ Password = ***, Token = *** }", shortText);    // For lengths up to Show, the tail is hidden and only *** is shown
+        Assert.Equal("{ Password = null, Token = null }", nullText);   // null is not masked and is output as null
     }
 
     [Fact]
     public void TestFormat()
     {
-        Assert.Equal(
-            "{ Code = 007, Hex = 00FF }",
-            new ToStringFormatData { Code = 7, Hex = 255 }.ToString());
+        // Arrange
+        var data = new ToStringFormatData { Code = 7, Hex = 255 };
+
+        // Act
+        var text = data.ToString();
+
+        // Assert
+        Assert.Equal("{ Code = 007, Hex = 00FF }", text); // The ToStringFormat format is applied
     }
 
     [Fact]
     public void TestMaxLength()
     {
-        Assert.Equal(
-            "{ Description = abc, Name = x }",
-            new ToStringMaxLengthData { Description = "abcdef", Name = "x" }.ToString());
-        Assert.Equal(
-            "{ Description = ab, Name = y }",
-            new ToStringMaxLengthData { Description = "ab", Name = "y" }.ToString());
-        Assert.Equal(
-            "{ Description = null, Name = z }",
-            new ToStringMaxLengthData { Name = "z" }.ToString());
+        // Arrange
+        var longValue = new ToStringMaxLengthData { Description = "abcdef", Name = "x" };
+        var withinLimit = new ToStringMaxLengthData { Description = "ab", Name = "y" };
+        var nullValue = new ToStringMaxLengthData { Name = "z" };
+
+        // Act
+        var longText = longValue.ToString();
+        var withinText = withinLimit.ToString();
+        var nullText = nullValue.ToString();
+
+        // Assert
+        Assert.Equal("{ Description = abc, Name = x }", longText);     // Truncated to the maximum length
+        Assert.Equal("{ Description = ab, Name = y }", withinText);    // Within the limit, kept as is
+        Assert.Equal("{ Description = null, Name = z }", nullText);    // null is excluded from truncation
     }
 
     [Fact]
     public void TestFormatWithMaxLength()
     {
-        // 書式適用後に切り詰め: 7 -> "000007" -> "000"
-        Assert.Equal(
-            "{ Number = 000 }",
-            new ToStringFormatMaxLengthData { Number = 7 }.ToString());
+        // Arrange
+        var data = new ToStringFormatMaxLengthData { Number = 7 };
+
+        // Act
+        var text = data.ToString();
+
+        // Assert
+        // Truncated after applying the format: 7 -> "000007" -> "000"
+        Assert.Equal("{ Number = 000 }", text);
     }
 }
