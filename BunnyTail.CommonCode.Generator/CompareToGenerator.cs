@@ -70,6 +70,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         foreach (var member in symbol.GetMembers().OfType<IPropertySymbol>())
         {
             // インデクサは this.<Name> でアクセスできないため対象外
+            // Indexers are excluded because they cannot be accessed via this.<Name>
             if (member.IsIndexer)
             {
                 continue;

@@ -65,6 +65,8 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
 
         // 既にクラスが実装しているメンバを収集 (手書きで実装しているものはスキップ)
         // メソッドはオーバーロードを区別するためシグネチャ単位で扱う
+        // Collect members the class already implements (hand-written implementations are skipped)
+        // Methods are handled per signature to distinguish overloads
         var existingSignatures = new HashSet<string>(StringComparer.Ordinal);
         foreach (var existing in symbol.GetMembers())
         {
@@ -113,6 +115,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
             }
 
             // 明示指定された InterfaceType を取得
+            // Get the explicitly specified InterfaceType
             var delegateAttr = memberAttrs.First(a => a.AttributeClass?.ToDisplayString() == DelegateToAttributeName);
             var specifiedInterface = GetInterfaceTypeArg(delegateAttr);
 
@@ -120,6 +123,10 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
             //  - InterfaceType が指定された場合はその型 (メンバ型が実装しているか検証)
             //  - メンバ型がインターフェースの場合はそのインターフェース
             //  - メンバ型が具象型の場合はその型が実装するインターフェース群
+            // Resolve the interfaces to delegate to
+            //  - If InterfaceType is specified, that type (verifying the member type implements it)
+            //  - If the member type is an interface, that interface
+            //  - If the member type is a concrete type, the set of interfaces it implements
             IEnumerable<INamedTypeSymbol> interfaces;
             if (specifiedInterface is not null)
             {

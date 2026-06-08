@@ -67,6 +67,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         var deepCollectionEquality = GetBoolArg(attr, "DeepCollectionEquality") ?? false;
 
         // 等価判定/ハッシュは、到達できる public プロパティを基底型まで辿って収集する (フラット仕様)
+        // For equality / hash, collect reachable public properties walking up to base types (flat spec)
         var properties = new List<EqualityPropertyModel>();
         var seenNames = new HashSet<string>(StringComparer.Ordinal);
         var currentSymbol = symbol;
@@ -75,6 +76,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             foreach (var member in currentSymbol.GetMembers().OfType<IPropertySymbol>())
             {
                 // インデクサは this.<Name> でアクセスできないため対象外
+                // Indexers are excluded because they cannot be accessed via this.<Name>
                 if (member.IsIndexer)
                 {
                     continue;
@@ -83,6 +85,9 @@ public sealed class EqualityGenerator : IIncrementalGenerator
                 // this.<Name> は最派生の宣言に束縛されるため、隠蔽された基底側の同名プロパティは収集しない。
                 // 可視性 / IgnoreEquality 判定より前で登録するのは意図的: 派生の private / ignore な new 隠蔽でも、
                 // this.<Name> から到達できない基底 public を誤って拾わず、コンパイルエラーや誤比較を防ぐ。
+                // Since this.<Name> binds to the most-derived declaration, a hidden base property of the same name is not collected.
+                // Registering before the visibility / IgnoreEquality check is intentional: even for a derived private / ignored new-hiding member,
+                // this avoids wrongly picking up a base public unreachable from this.<Name>, preventing compile errors or incorrect comparisons.
                 if (!seenNames.Add(member.Name))
                 {
                     continue;

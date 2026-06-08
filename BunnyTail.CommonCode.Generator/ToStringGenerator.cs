@@ -109,6 +109,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             foreach (var member in currentSymbol.GetMembers().OfType<IPropertySymbol>())
             {
                 // インデクサは this.<Name> でアクセスできないため対象外
+                // Indexers are excluded because they cannot be accessed via this.<Name>
                 if (member.IsIndexer)
                 {
                     continue;
@@ -117,6 +118,9 @@ public sealed class ToStringGenerator : IIncrementalGenerator
                 // this.<Name> は最派生の宣言に束縛されるため、隠蔽された基底側の同名プロパティは収集しない。
                 // 可視性 / IgnoreToString 判定より前で登録するのは意図的: 派生の private / ignore な new 隠蔽でも、
                 // this.<Name> から到達できない基底 public を誤って拾わず、隠蔽 / ignore したメンバの値を出力しない。
+                // Since this.<Name> binds to the most-derived declaration, a hidden base property of the same name is not collected.
+                // Registering before the visibility / IgnoreToString check is intentional: even for a derived private / ignored new-hiding member,
+                // this avoids wrongly picking up a base public unreachable from this.<Name>, and avoids outputting the value of a hidden / ignored member.
                 if (!seenNames.Add(member.Name))
                 {
                     continue;

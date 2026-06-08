@@ -51,6 +51,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         }
 
         // IDeepCloneable<T> を実装しているか確認
+        // Check whether IDeepCloneable<T> is implemented
         var implementsDeepCloneable = symbol.AllInterfaces.Any(i =>
             i.IsGenericType && i.ConstructedFrom.ToDisplayString() == IDeepCloneableName);
         if (!implementsDeepCloneable)
@@ -77,6 +78,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         foreach (var member in symbol.GetMembers().OfType<IPropertySymbol>())
         {
             // インデクサは clone.<Name> で代入できないため対象外
+            // Indexers are excluded because they cannot be assigned via clone.<Name>
             if (member.IsIndexer)
             {
                 continue;
@@ -93,6 +95,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
             }
 
             // set / init のいずれも持たない (get-only) プロパティは代入できないため対象外
+            // Properties with neither set nor init (get-only) are excluded because they cannot be assigned
             if (member.SetMethod is null)
             {
                 continue;
@@ -111,6 +114,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
             if (!shallow && cloneStrategy == CloneStrategy.Unknown)
             {
                 // ディープクローン手段が不明な参照型はシャローコピーに落とすが、利用者へ診断で通知する
+                // Reference types with no known deep-clone method fall back to a shallow copy, but notify the user via a diagnostic
                 diagnostics.Add(new DiagnosticInfo(
                     Diagnostics.DeepClonePropertyMissingDeepClone,
                     member.Locations.FirstOrDefault() ?? syntax.GetLocation(),
@@ -235,6 +239,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         builder.Indent().Append("var clone = new ").Append(type.ClassName);
 
         // init 専用プロパティはコンストラクション後に代入できないため、オブジェクト初期化子で設定する
+        // init-only properties cannot be assigned after construction, so set them via the object initializer
         var hasInit = false;
         foreach (var prop in properties)
         {
@@ -267,6 +272,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         }
 
         // set 可能なプロパティは代入で設定する
+        // Settable properties are set via assignment
         foreach (var prop in properties)
         {
             if (prop.RequiresInit)
