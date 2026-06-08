@@ -1,4 +1,10 @@
 <Solution>
+  <Folder Name="/Library/">
+    <Project Path="BunnyTail.CommonCode.Generator/BunnyTail.CommonCode.Generator.csproj" />
+    <Project Path="BunnyTail.CommonCode/BunnyTail.CommonCode.csproj">
+      <BuildDependency Project="BunnyTail.CommonCode.Generator/BunnyTail.CommonCode.Generator.csproj" />
+    </Project>
+  </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
     <File Path=".gitattributes" />
@@ -14,9 +20,7 @@
     <File Path="LICENSE" />
     <File Path="README.md" />
   </Folder>
-  <Project Path="BunnyTail.CommonCode/BunnyTail.CommonCode.csproj">
-    <BuildDependency Project="BunnyTail.CommonCode.Generator/BunnyTail.CommonCode.Generator.csproj" />
-  </Project>
-  <Project Path="BunnyTail.CommonCode.Generator/BunnyTail.CommonCode.Generator.csproj" />
-  <Project Path="BunnyTail.CommonCode.Tests/BunnyTail.CommonCode.Tests.csproj" />
+  <Folder Name="/Tests/">
+    <Project Path="BunnyTail.CommonCode.Tests/BunnyTail.CommonCode.Tests.csproj" />
+  </Folder>
 </Solution>
