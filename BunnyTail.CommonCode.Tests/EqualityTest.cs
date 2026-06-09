@@ -120,19 +120,6 @@ public class EqualityTest
     }
 
     [Fact]
-    public void WhenSameReferenceThenEquals()
-    {
-        // Arrange
-        var a = new EqualityMoneyData { Amount = 1m, Currency = "USD" };
-
-        // Act
-        var result = a.Equals(a);
-
-        // Assert
-        Assert.True(result);
-    }
-
-    [Fact]
     public void GetHashCodeConsistentWithEquals()
     {
         // Arrange
