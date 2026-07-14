@@ -35,9 +35,14 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
             .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : [])
             .Collect();
 
-        context.RegisterImplementationSourceOutput(
+        context.RegisterSourceOutput(
             targetProvider,
-            static (spc, types) => Execute(spc, types));
+            static (spc, types) => ReportDiagnostics(spc, types));
+
+        var models = targetProvider.SelectMany(static (types, _) => types.SelectValue().ToImmutableArray());
+        context.RegisterImplementationSourceOutput(
+            models,
+            static (spc, type) => Execute(spc, type));
     }
 
     private static Result<DeepCloneTypeModel> GetTypeModel(GeneratorAttributeSyntaxContext context)
@@ -47,7 +52,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
 
         if (!syntax.Modifiers.Any(static x => x.IsKind(SyntaxKind.PartialKeyword)))
         {
-            return Results.Error<DeepCloneTypeModel>(new DiagnosticInfo(Diagnostics.DeepCloneInvalidTypeDefinition, syntax.GetLocation(), symbol.Name));
+            return Results.Error<DeepCloneTypeModel>(new DiagnosticInfo(Diagnostics.DeepCloneInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
         // IDeepCloneable<T> を実装しているか確認
@@ -56,7 +61,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
             i.IsGenericType && i.ConstructedFrom.ToDisplayString() == IDeepCloneableName);
         if (!implementsDeepCloneable)
         {
-            return Results.Error<DeepCloneTypeModel>(new DiagnosticInfo(Diagnostics.DeepCloneNotImplementIDeepCloneable, syntax.GetLocation(), symbol.Name));
+            return Results.Error<DeepCloneTypeModel>(new DiagnosticInfo(Diagnostics.DeepCloneNotImplementIDeepCloneable, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
         var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name)
@@ -176,24 +181,23 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
     // Execute
     // ------------------------------------------------------------
 
-    private static void Execute(SourceProductionContext context, ImmutableArray<Result<DeepCloneTypeModel>> types)
+    private static void ReportDiagnostics(SourceProductionContext context, ImmutableArray<Result<DeepCloneTypeModel>> types)
     {
         foreach (var info in types.SelectError())
         {
             context.ReportDiagnostic(info);
         }
+    }
+
+    private static void Execute(SourceProductionContext context, DeepCloneTypeModel type)
+    {
+        context.CancellationToken.ThrowIfCancellationRequested();
 
         var builder = new SourceBuilder();
-        foreach (var type in types.SelectValue())
-        {
-            context.CancellationToken.ThrowIfCancellationRequested();
+        BuildSource(builder, type);
 
-            builder.Clear();
-            BuildSource(builder, type);
-
-            var filename = MakeFilename(type.Namespace, type.ContainingTypes, type.ClassName, "DeepClone");
-            context.AddSource(filename, SourceText.From(builder.ToString(), Encoding.UTF8));
-        }
+        var filename = MakeFilename(type.Namespace, type.ContainingTypes, type.ClassName, "DeepClone");
+        context.AddSource(filename, SourceText.From(builder.ToString(), Encoding.UTF8));
     }
 
     private static void BuildSource(SourceBuilder builder, DeepCloneTypeModel type)

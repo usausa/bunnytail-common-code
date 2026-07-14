@@ -1,6 +1,32 @@
 namespace BunnyTail.CommonCode;
 
 [GenerateEquality]
+internal partial struct StructData
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+}
+
+[GenerateEquality]
+internal readonly partial struct ReadOnlyStructData
+{
+    public ReadOnlyStructData(int value, string label)
+    {
+        Value = value;
+        Label = label;
+    }
+
+    public int Value { get; }
+    public string Label { get; }
+}
+
+[GenerateEquality(DeepCollectionEquality = true)]
+internal readonly partial struct CollectionStructData
+{
+    public List<int> Items { get; init; }
+}
+
+[GenerateEquality]
 public partial class EqualityMoneyData
 {
     public decimal Amount { get; init; }
@@ -73,6 +99,16 @@ public partial class EqualityHiddenDerived : EqualityHiddenBase
     public new int Token { get; init; }
 
     public string Label { get; init; } = default!;
+}
+
+// record struct: generator must not generate any Equals — built-in value equality must be preserved.
+[GenerateEquality]
+internal partial record struct RecordStructData(int X);
+
+[GenerateEquality(DeepCollectionEquality = true)]
+internal sealed partial class EqualityEnumerableData
+{
+    public List<int> Values { get; init; } = [];
 }
 
 public class EqualityTest
@@ -231,5 +267,126 @@ public class EqualityTest
         // Act & Assert
         Assert.True(a.Equals(b));  // Hidden Token is excluded from comparison
         Assert.False(a.Equals(c)); // Determined by Label
+    }
+
+    [Fact]
+    public void StructDataSameValuesThenEquals()
+    {
+        // Arrange
+        var a = new StructData { Id = 1, Name = "Alice" };
+        var b = new StructData { Id = 1, Name = "Alice" };
+
+        // Act & Assert
+        Assert.True(a.Equals(b));
+        Assert.True(a == b);
+        Assert.False(a != b);
+    }
+
+    [Fact]
+    public void StructDataDifferentValuesThenNotEquals()
+    {
+        // Arrange
+        var a = new StructData { Id = 1, Name = "Alice" };
+        var b = new StructData { Id = 2, Name = "Alice" };
+
+        // Act & Assert
+        Assert.False(a.Equals(b));
+        Assert.False(a == b);
+        Assert.True(a != b);
+    }
+
+    [Fact]
+    public void StructDataGetHashCodeConsistentWithEquals()
+    {
+        // Arrange
+        var a = new StructData { Id = 42, Name = "Bob" };
+        var b = new StructData { Id = 42, Name = "Bob" };
+
+        // Act & Assert
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
+    public void StructDataEquatableInterfaceWorks()
+    {
+        // Arrange
+        var a = new StructData { Id = 7, Name = "X" };
+        var b = new StructData { Id = 7, Name = "X" };
+
+        // Act & Assert — verify IEquatable<StructData> is callable via interface dispatch
+        // Box through object so the static analyzer cannot infer the concrete type.
+        object boxed = a;
+        Assert.True(((System.IEquatable<StructData>)boxed).Equals(b));
+    }
+
+    [Fact]
+    public void StructDataEqualsObjectWithDifferentTypeFalse()
+    {
+        // Arrange
+        var a = new StructData { Id = 1, Name = "A" };
+
+        // Act & Assert
+        Assert.False(a.Equals(obj: "not a StructData"));
+    }
+
+    [Fact]
+    public void ReadOnlyStructDataSameValuesThenEquals()
+    {
+        // Arrange
+        var a = new ReadOnlyStructData(10, "hello");
+        var b = new ReadOnlyStructData(10, "hello");
+
+        // Act & Assert
+        Assert.True(a.Equals(b));
+        Assert.True(a == b);
+    }
+
+    [Fact]
+    public void ReadOnlyStructDataDifferentValuesThenNotEquals()
+    {
+        // Arrange
+        var a = new ReadOnlyStructData(10, "hello");
+        var b = new ReadOnlyStructData(99, "hello");
+
+        // Act & Assert
+        Assert.False(a.Equals(b));
+        Assert.False(a == b);
+        Assert.True(a != b);
+    }
+
+    [Fact]
+    public void CollectionStructDataSameElementsDifferentInstancesThenEquals()
+    {
+        // Arrange
+        var a = new CollectionStructData { Items = [1, 2, 3] };
+        var b = new CollectionStructData { Items = [1, 2, 3] };
+
+        // Act & Assert — DeepCollectionEquality compares element-by-element
+        Assert.True(a.Equals(b));
+    }
+
+    [Fact]
+    public void RecordStructDataBuiltInEqualityPreserved()
+    {
+        // Arrange
+        var a = new RecordStructData(5);
+        var b = new RecordStructData(5);
+        var c = new RecordStructData(6);
+
+        // Act & Assert — built-in record struct equality, generator emits nothing for records
+        Assert.True(a == b);
+        Assert.True(a.Equals(b));
+        Assert.False(a == c);
+    }
+
+    [Fact]
+    public void EnumerableDataSameElementsDifferentListInstancesThenEquals()
+    {
+        // Arrange
+        var a = new EqualityEnumerableData { Values = [10, 20, 30] };
+        var b = new EqualityEnumerableData { Values = [10, 20, 30] };
+
+        // Act & Assert — IsCollectionType fix: IEnumerable<T> itself is recognised as collection
+        Assert.True(a.Equals(b));
     }
 }

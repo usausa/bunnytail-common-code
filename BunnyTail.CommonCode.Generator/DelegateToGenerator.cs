@@ -31,9 +31,14 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
             .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : [])
             .Collect();
 
-        context.RegisterImplementationSourceOutput(
+        context.RegisterSourceOutput(
             targetProvider,
-            static (spc, types) => Execute(spc, types));
+            static (spc, types) => ReportDiagnostics(spc, types));
+
+        var models = targetProvider.SelectMany(static (types, _) => types.SelectValue().ToImmutableArray());
+        context.RegisterImplementationSourceOutput(
+            models,
+            static (spc, type) => Execute(spc, type));
     }
 
     private static Result<DelegateToTypeModel> GetTypeModel(GeneratorAttributeSyntaxContext context)
@@ -43,7 +48,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
 
         if (!syntax.Modifiers.Any(static x => x.IsKind(SyntaxKind.PartialKeyword)))
         {
-            return Results.Error<DelegateToTypeModel>(new DiagnosticInfo(Diagnostics.DelegateToInvalidTypeDefinition, syntax.GetLocation(), symbol.Name));
+            return Results.Error<DelegateToTypeModel>(new DiagnosticInfo(Diagnostics.DelegateToInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
         var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name)
@@ -134,7 +139,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                 {
                     diagnostics.Add(new DiagnosticInfo(
                         Diagnostics.DelegateToInvalidInterfaceType,
-                        member.Locations.FirstOrDefault() ?? syntax.GetLocation(),
+                        member.Locations.FirstOrDefault() ?? syntax.Identifier.GetLocation(),
                         memberName,
                         specifiedInterface.ToDisplayString()));
                     continue;
@@ -227,7 +232,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         {
             if (diagnostics.Count == 0)
             {
-                diagnostics.Add(new DiagnosticInfo(Diagnostics.DelegateToNoDelegateField, syntax.GetLocation(), symbol.Name));
+                diagnostics.Add(new DiagnosticInfo(Diagnostics.DelegateToNoDelegateField, syntax.Identifier.GetLocation(), symbol.Name));
             }
 
             return new Result<DelegateToTypeModel>(default!, new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
@@ -306,24 +311,23 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
     // Execute
     // ------------------------------------------------------------
 
-    private static void Execute(SourceProductionContext context, ImmutableArray<Result<DelegateToTypeModel>> types)
+    private static void ReportDiagnostics(SourceProductionContext context, ImmutableArray<Result<DelegateToTypeModel>> types)
     {
         foreach (var info in types.SelectError())
         {
             context.ReportDiagnostic(info);
         }
+    }
+
+    private static void Execute(SourceProductionContext context, DelegateToTypeModel type)
+    {
+        context.CancellationToken.ThrowIfCancellationRequested();
 
         var builder = new SourceBuilder();
-        foreach (var type in types.SelectValue())
-        {
-            context.CancellationToken.ThrowIfCancellationRequested();
+        BuildSource(builder, type);
 
-            builder.Clear();
-            BuildSource(builder, type);
-
-            var filename = MakeFilename(type.Namespace, type.ContainingTypes, type.ClassName, "DelegateTo");
-            context.AddSource(filename, SourceText.From(builder.ToString(), Encoding.UTF8));
-        }
+        var filename = MakeFilename(type.Namespace, type.ContainingTypes, type.ClassName, "DelegateTo");
+        context.AddSource(filename, SourceText.From(builder.ToString(), Encoding.UTF8));
     }
 
     private static void BuildSource(SourceBuilder builder, DelegateToTypeModel type)

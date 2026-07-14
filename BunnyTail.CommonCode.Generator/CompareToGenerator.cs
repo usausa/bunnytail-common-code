@@ -31,9 +31,14 @@ public sealed class CompareToGenerator : IIncrementalGenerator
             .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : [])
             .Collect();
 
-        context.RegisterImplementationSourceOutput(
+        context.RegisterSourceOutput(
             targetProvider,
-            static (spc, types) => Execute(spc, types));
+            static (spc, types) => ReportDiagnostics(spc, types));
+
+        var models = targetProvider.SelectMany(static (types, _) => types.SelectValue().ToImmutableArray());
+        context.RegisterImplementationSourceOutput(
+            models,
+            static (spc, type) => Execute(spc, type));
     }
 
     private static Result<CompareToTypeModel> GetTypeModel(GeneratorAttributeSyntaxContext context)
@@ -43,7 +48,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
 
         if (!syntax.Modifiers.Any(static x => x.IsKind(SyntaxKind.PartialKeyword)))
         {
-            return Results.Error<CompareToTypeModel>(new DiagnosticInfo(Diagnostics.CompareToInvalidTypeDefinition, syntax.GetLocation(), symbol.Name));
+            return Results.Error<CompareToTypeModel>(new DiagnosticInfo(Diagnostics.CompareToInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
         var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name)
@@ -93,7 +98,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
 
         if (keys.Count == 0)
         {
-            return Results.Error<CompareToTypeModel>(new DiagnosticInfo(Diagnostics.CompareToNoKeys, syntax.GetLocation(), symbol.Name));
+            return Results.Error<CompareToTypeModel>(new DiagnosticInfo(Diagnostics.CompareToNoKeys, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
         keys.Sort(static (a, b) => a.Order.CompareTo(b.Order));
@@ -143,24 +148,23 @@ public sealed class CompareToGenerator : IIncrementalGenerator
     // Execute
     // ------------------------------------------------------------
 
-    private static void Execute(SourceProductionContext context, ImmutableArray<Result<CompareToTypeModel>> types)
+    private static void ReportDiagnostics(SourceProductionContext context, ImmutableArray<Result<CompareToTypeModel>> types)
     {
         foreach (var info in types.SelectError())
         {
             context.ReportDiagnostic(info);
         }
+    }
+
+    private static void Execute(SourceProductionContext context, CompareToTypeModel type)
+    {
+        context.CancellationToken.ThrowIfCancellationRequested();
 
         var builder = new SourceBuilder();
-        foreach (var type in types.SelectValue())
-        {
-            context.CancellationToken.ThrowIfCancellationRequested();
+        BuildSource(builder, type);
 
-            builder.Clear();
-            BuildSource(builder, type);
-
-            var filename = MakeFilename(type.Namespace, type.ContainingTypes, type.ClassName, "CompareTo");
-            context.AddSource(filename, SourceText.From(builder.ToString(), Encoding.UTF8));
-        }
+        var filename = MakeFilename(type.Namespace, type.ContainingTypes, type.ClassName, "CompareTo");
+        context.AddSource(filename, SourceText.From(builder.ToString(), Encoding.UTF8));
     }
 
     private static void BuildSource(SourceBuilder builder, CompareToTypeModel type)
@@ -198,11 +202,11 @@ public sealed class CompareToGenerator : IIncrementalGenerator
             .NewLine();
         builder.BeginScope();
 
-        // CompareTo(T?)
+        // CompareTo(T) for value types, CompareTo(T?) for reference types
         builder.Indent()
             .Append("public int CompareTo(")
             .Append(type.ClassName)
-            .Append("? other)")
+            .Append(type.IsValueType ? " other)" : "? other)")
             .NewLine();
         builder.BeginScope();
 

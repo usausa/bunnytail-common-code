@@ -31,9 +31,14 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : [])
             .Collect();
 
-        context.RegisterImplementationSourceOutput(
+        context.RegisterSourceOutput(
             targetProvider,
-            static (spc, types) => Execute(spc, types));
+            static (spc, types) => ReportDiagnostics(spc, types));
+
+        var models = targetProvider.SelectMany(static (types, _) => types.SelectValue().ToImmutableArray());
+        context.RegisterImplementationSourceOutput(
+            models,
+            static (spc, type) => Execute(spc, type));
     }
 
     private static Result<EqualityTypeModel> GetTypeModel(GeneratorAttributeSyntaxContext context)
@@ -43,7 +48,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
 
         if (!syntax.Modifiers.Any(static x => x.IsKind(SyntaxKind.PartialKeyword)))
         {
-            return Results.Error<EqualityTypeModel>(new DiagnosticInfo(Diagnostics.EqualityInvalidTypeDefinition, syntax.GetLocation(), symbol.Name));
+            return Results.Error<EqualityTypeModel>(new DiagnosticInfo(Diagnostics.EqualityInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
         var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name)
@@ -124,7 +129,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
 
         if (properties.Count == 0)
         {
-            return Results.Error<EqualityTypeModel>(new DiagnosticInfo(Diagnostics.EqualityNoProperties, syntax.GetLocation(), symbol.Name));
+            return Results.Error<EqualityTypeModel>(new DiagnosticInfo(Diagnostics.EqualityNoProperties, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
         return Results.Success(new EqualityTypeModel(
@@ -166,6 +171,12 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             return true;
         }
 
+        if (typeSymbol is INamedTypeSymbol { IsGenericType: true } namedType &&
+            (namedType.ConstructedFrom.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>"))
+        {
+            return true;
+        }
+
         foreach (var iface in typeSymbol.AllInterfaces)
         {
             if (iface.IsGenericType && iface.ConstructedFrom.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>")
@@ -181,24 +192,23 @@ public sealed class EqualityGenerator : IIncrementalGenerator
     // Execute
     // ------------------------------------------------------------
 
-    private static void Execute(SourceProductionContext context, ImmutableArray<Result<EqualityTypeModel>> types)
+    private static void ReportDiagnostics(SourceProductionContext context, ImmutableArray<Result<EqualityTypeModel>> types)
     {
         foreach (var info in types.SelectError())
         {
             context.ReportDiagnostic(info);
         }
+    }
+
+    private static void Execute(SourceProductionContext context, EqualityTypeModel type)
+    {
+        context.CancellationToken.ThrowIfCancellationRequested();
 
         var builder = new SourceBuilder();
-        foreach (var type in types.SelectValue())
-        {
-            context.CancellationToken.ThrowIfCancellationRequested();
+        BuildSource(builder, type);
 
-            builder.Clear();
-            BuildSource(builder, type);
-
-            var filename = MakeFilename(type.Namespace, type.ContainingTypes, type.ClassName, "Equality");
-            context.AddSource(filename, SourceText.From(builder.ToString(), Encoding.UTF8));
-        }
+        var filename = MakeFilename(type.Namespace, type.ContainingTypes, type.ClassName, "Equality");
+        context.AddSource(filename, SourceText.From(builder.ToString(), Encoding.UTF8));
     }
 
     private static void BuildSource(SourceBuilder builder, EqualityTypeModel type)
@@ -244,11 +254,11 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             .NewLine();
         builder.NewLine();
 
-        // Equals(T?)
+        // Equals(T) for value types, Equals(T?) for reference types
         builder.Indent()
             .Append("public bool Equals(")
             .Append(type.ClassName)
-            .Append("? other)")
+            .Append(type.IsValueType ? " other)" : "? other)")
             .NewLine();
         builder.BeginScope();
 
@@ -335,27 +345,48 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         builder.EndScope();
 
         // operators
-        if (type.GenerateOperators && !type.IsValueType)
+        if (type.GenerateOperators)
         {
             builder.NewLine();
-            builder.Indent()
-                .Append("public static bool operator ==(")
-                .Append(type.ClassName)
-                .Append("? left, ")
-                .Append(type.ClassName)
-                .Append("? right) =>")
-                .NewLine();
-            builder.Indent()
-                .Append("    global::System.Object.ReferenceEquals(left, right) || (left is not null && left.Equals(right));")
-                .NewLine();
-            builder.NewLine();
-            builder.Indent()
-                .Append("public static bool operator !=(")
-                .Append(type.ClassName)
-                .Append("? left, ")
-                .Append(type.ClassName)
-                .Append("? right) => !(left == right);")
-                .NewLine();
+            if (type.IsValueType)
+            {
+                builder.Indent()
+                    .Append("public static bool operator ==(")
+                    .Append(type.ClassName)
+                    .Append(" left, ")
+                    .Append(type.ClassName)
+                    .Append(" right) => left.Equals(right);")
+                    .NewLine();
+                builder.NewLine();
+                builder.Indent()
+                    .Append("public static bool operator !=(")
+                    .Append(type.ClassName)
+                    .Append(" left, ")
+                    .Append(type.ClassName)
+                    .Append(" right) => !left.Equals(right);")
+                    .NewLine();
+            }
+            else
+            {
+                builder.Indent()
+                    .Append("public static bool operator ==(")
+                    .Append(type.ClassName)
+                    .Append("? left, ")
+                    .Append(type.ClassName)
+                    .Append("? right) =>")
+                    .NewLine();
+                builder.Indent()
+                    .Append("    global::System.Object.ReferenceEquals(left, right) || (left is not null && left.Equals(right));")
+                    .NewLine();
+                builder.NewLine();
+                builder.Indent()
+                    .Append("public static bool operator !=(")
+                    .Append(type.ClassName)
+                    .Append("? left, ")
+                    .Append(type.ClassName)
+                    .Append("? right) => !(left == right);")
+                    .NewLine();
+            }
         }
 
         // SequenceEqualOrBothNull helper
@@ -413,8 +444,6 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         buffer.Append(".g.cs");
         return buffer.ToString();
     }
-
-    // TODO
 
     private sealed record ContainingTypeModel(
         string ClassName,

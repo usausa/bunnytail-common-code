@@ -41,9 +41,16 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : [])
             .Collect();
 
+        context.RegisterSourceOutput(
+            targetProvider,
+            static (spc, types) => ReportDiagnostics(spc, types));
+
+        var models = targetProvider
+            .SelectMany(static (types, _) => types.SelectValue().ToImmutableArray())
+            .Combine(optionProvider);
         context.RegisterImplementationSourceOutput(
-            optionProvider.Combine(targetProvider),
-            static (spc, source) => Execute(spc, source.Left, source.Right));
+            models,
+            static (spc, pair) => Execute(spc, pair.Right, pair.Left));
     }
 
     private static GeneratorOptions GetOptions(AnalyzerConfigOptionsProvider provider)
@@ -84,7 +91,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 
         if (!syntax.Modifiers.Any(static x => x.IsKind(SyntaxKind.PartialKeyword)))
         {
-            return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.InvalidTypeDefinition, syntax.GetLocation(), symbol.Name));
+            return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.InvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
         var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name)
@@ -214,6 +221,13 @@ public sealed class ToStringGenerator : IIncrementalGenerator
                 return (true, elementType.IsReferenceType || elementType.IsGenericType());
             }
 
+            if (typeSymbol is INamedTypeSymbol { IsGenericType: true } namedTypeSymbol &&
+                (namedTypeSymbol.ConstructedFrom.ToDisplayString() == GenericEnumerableName))
+            {
+                var elementType = namedTypeSymbol.TypeArguments[0];
+                return (true, elementType.IsReferenceType || elementType.IsGenericType());
+            }
+
             foreach (var @interface in typeSymbol.AllInterfaces)
             {
                 if (@interface.IsGenericType && (@interface.ConstructedFrom.ToDisplayString() == GenericEnumerableName))
@@ -226,29 +240,29 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 
         return (false, typeSymbol.IsReferenceType || typeSymbol.IsGenericType());
     }
+
     // ------------------------------------------------------------
     // Builder
     // ------------------------------------------------------------
 
-    private static void Execute(SourceProductionContext context, GeneratorOptions options, ImmutableArray<Result<TypeModel>> types)
+    private static void ReportDiagnostics(SourceProductionContext context, ImmutableArray<Result<TypeModel>> types)
     {
         foreach (var info in types.SelectError())
         {
             context.ReportDiagnostic(info);
         }
+    }
+
+    private static void Execute(SourceProductionContext context, GeneratorOptions options, TypeModel type)
+    {
+        context.CancellationToken.ThrowIfCancellationRequested();
 
         var builder = new SourceBuilder();
-        foreach (var type in types.SelectValue())
-        {
-            context.CancellationToken.ThrowIfCancellationRequested();
+        BuildSource(builder, options, type);
 
-            builder.Clear();
-            BuildSource(builder, options, type);
-
-            var filename = MakeFilename(type.Namespace, type.ContainingTypes, type.ClassName);
-            var source = builder.ToString();
-            context.AddSource(filename, SourceText.From(source, Encoding.UTF8));
-        }
+        var filename = MakeFilename(type.Namespace, type.ContainingTypes, type.ClassName);
+        var source = builder.ToString();
+        context.AddSource(filename, SourceText.From(source, Encoding.UTF8));
     }
 
     private static void BuildSource(SourceBuilder builder, GeneratorOptions options, TypeModel type)
