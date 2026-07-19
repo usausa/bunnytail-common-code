@@ -103,6 +103,7 @@ public partial class EqualityHiddenDerived : EqualityHiddenBase
 
 // record struct: generator must not generate any Equals — built-in value equality must be preserved.
 [GenerateEquality]
+// ReSharper disable once PartialTypeWithSinglePart
 internal partial record struct RecordStructData(int X);
 
 [GenerateEquality(DeepCollectionEquality = true)]
@@ -316,7 +317,7 @@ public class EqualityTest
         // Act & Assert — verify IEquatable<StructData> is callable via interface dispatch
         // Box through object so the static analyzer cannot infer the concrete type.
         object boxed = a;
-        Assert.True(((System.IEquatable<StructData>)boxed).Equals(b));
+        Assert.True(((IEquatable<StructData>)boxed).Equals(b));
     }
 
     [Fact]
@@ -326,6 +327,7 @@ public class EqualityTest
         var a = new StructData { Id = 1, Name = "A" };
 
         // Act & Assert
+        // ReSharper disable once SuspiciousTypeConversion.Global
         Assert.False(a.Equals(obj: "not a StructData"));
     }
 
