@@ -24,6 +24,35 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 
     private const string GenericEnumerableName = "System.Collections.Generic.IEnumerable<T>";
 
+    private const string OptionPrefix = "CommonCodeGeneratorToString";
+
+    private const string MaskLiteral = "***";
+    private const string EllipsisLiteral = "...";
+
+    private const string TypeNameCacheField = "GeneratedToStringPrefix";
+    private const string TypeNameFormatMethod = "GeneratedToStringFormatTypeName";
+
+    // C# のキーワードを持つ型は typeof(int) のように別名で出力する
+    // Types that have a C# keyword are written using the keyword, such as int instead of Int32
+    private static readonly string[] PrimitiveTypeNames =
+    [
+        "bool",
+        "byte",
+        "sbyte",
+        "char",
+        "decimal",
+        "double",
+        "float",
+        "int",
+        "uint",
+        "long",
+        "ulong",
+        "short",
+        "ushort",
+        "object",
+        "string"
+    ];
+
     // ------------------------------------------------------------
     // Initialize
     // ------------------------------------------------------------
@@ -53,40 +82,243 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             static (spc, pair) => Execute(spc, pair.Right, pair.Left));
     }
 
-    private static GeneratorOptions GetOptions(AnalyzerConfigOptionsProvider provider)
+    private static bool IsTypeSyntax(SyntaxNode node) =>
+        node is ClassDeclarationSyntax or StructDeclarationSyntax;
+
+    // ------------------------------------------------------------
+    // Option
+    // ------------------------------------------------------------
+
+    private static OptionModel GetOptions(AnalyzerConfigOptionsProvider provider)
     {
-        var options = new GeneratorOptions();
-
-        // Mode
-        var mode = provider.GlobalOptions.GetValue<string?>("CommonCodeGeneratorToStringMode");
-        if (String.IsNullOrEmpty(mode) || String.Equals(mode, "Default", StringComparison.OrdinalIgnoreCase))
-        {
-            options.OutputClassName = true;
-        }
-
-        // OutputClassName
-        var outputClassName = provider.GlobalOptions.GetValue<bool?>("CommonCodeGeneratorToStringOutputClassName");
-        if (outputClassName.HasValue)
-        {
-            options.OutputClassName = outputClassName.Value;
-        }
-
-        // NullLiteral
-        var nullLiteral = provider.GlobalOptions.GetValue<string?>("CommonCodeGeneratorToStringNullLiteral");
-        if (!String.IsNullOrEmpty(nullLiteral))
-        {
-            options.NullLiteral = nullLiteral;
-        }
-
-        return options;
+        var options = provider.GlobalOptions;
+        return new OptionModel(
+            GetEnumOption<StyleOption>(options, "Style"),
+            GetEnumOption<TypeNameOption>(options, "TypeName"),
+            GetEnumOption<TypeArgumentOption>(options, "TypeArgument"),
+            GetEnumOption<NullOption>(options, "Null"),
+            GetStringOption(options, "NullLiteral"),
+            GetEnumOption<CollectionOption>(options, "Collection"),
+            GetIntOption(options, "CollectionLimit"),
+            GetEnumOption<MemberKindOption>(options, "Members"),
+            GetEnumOption<BracketOption>(options, "Bracket"),
+            GetStringOption(options, "OpenBracket"),
+            GetStringOption(options, "CloseBracket"),
+            GetEnumOption<SpaceOption>(options, "InnerSpace"),
+            GetEnumOption<SpaceOption>(options, "TypeNameSpace"),
+            GetStringOption(options, "Separator"),
+            GetStringOption(options, "Assign"),
+            GetEnumOption<BracketOption>(options, "CollectionBracket"),
+            GetStringOption(options, "CollectionOpenBracket"),
+            GetStringOption(options, "CollectionCloseBracket"),
+            GetEnumOption<SpaceOption>(options, "CollectionInnerSpace"),
+            GetStringOption(options, "CollectionSeparator"));
     }
 
-    private static bool IsTypeSyntax(SyntaxNode node) =>
-        node is ClassDeclarationSyntax;
+    private static string? GetStringOption(AnalyzerConfigOptions options, string name) =>
+        options.GetValue<string?>(OptionPrefix + name);
+
+    private static T GetEnumOption<T>(AnalyzerConfigOptions options, string name)
+        where T : struct, Enum
+    {
+        var value = options.GetValue<string?>(OptionPrefix + name);
+        return !String.IsNullOrEmpty(value) && Enum.TryParse<T>(value, true, out var result) ? result : default;
+    }
+
+    private static int GetIntOption(AnalyzerConfigOptions options, string name)
+    {
+        var value = options.GetValue<string?>(OptionPrefix + name);
+        return !String.IsNullOrEmpty(value) && Int32.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result) ? result : 0;
+    }
+
+    private static OptionModel GetAttributeOptions(AttributeData attr) =>
+        new(
+            GetEnumArgument<StyleOption>(attr, "Style"),
+            GetEnumArgument<TypeNameOption>(attr, "TypeName"),
+            GetEnumArgument<TypeArgumentOption>(attr, "TypeArgument"),
+            GetEnumArgument<NullOption>(attr, "Null"),
+            GetStringArgument(attr, "NullLiteral"),
+            GetEnumArgument<CollectionOption>(attr, "Collection"),
+            GetIntArgument(attr, "CollectionLimit"),
+            GetEnumArgument<MemberKindOption>(attr, "Members"),
+            GetEnumArgument<BracketOption>(attr, "Bracket"),
+            GetStringArgument(attr, "OpenBracket"),
+            GetStringArgument(attr, "CloseBracket"),
+            GetEnumArgument<SpaceOption>(attr, "InnerSpace"),
+            GetEnumArgument<SpaceOption>(attr, "TypeNameSpace"),
+            GetStringArgument(attr, "Separator"),
+            GetStringArgument(attr, "Assign"),
+            GetEnumArgument<BracketOption>(attr, "CollectionBracket"),
+            GetStringArgument(attr, "CollectionOpenBracket"),
+            GetStringArgument(attr, "CollectionCloseBracket"),
+            GetEnumArgument<SpaceOption>(attr, "CollectionInnerSpace"),
+            GetStringArgument(attr, "CollectionSeparator"));
+
+    private static T GetEnumArgument<T>(AttributeData attr, string name)
+        where T : struct, Enum
+    {
+        var arg = attr.NamedArguments.FirstOrDefault(x => x.Key == name);
+        return arg.Value.Value is int value ? (T)Enum.ToObject(typeof(T), value) : default;
+    }
+
+    private static string? GetStringArgument(AttributeData attr, string name)
+    {
+        var arg = attr.NamedArguments.FirstOrDefault(x => x.Key == name);
+        return arg.Value.Value as string;
+    }
+
+    private static int GetIntArgument(AttributeData attr, string name)
+    {
+        var arg = attr.NamedArguments.FirstOrDefault(x => x.Key == name);
+        return arg.Value.Value is int value ? value : 0;
+    }
+
+    // ------------------------------------------------------------
+    // Settings
+    // ------------------------------------------------------------
+
+    private static SettingsModel ResolveSettings(OptionModel global, OptionModel local)
+    {
+        var style = local.Style != StyleOption.Inherit
+            ? local.Style
+            : global.Style != StyleOption.Inherit
+                ? global.Style
+                : StyleOption.Default;
+
+        var resolved = GetPreset(style);
+
+        // 型側で Style を指定した場合はプリセットへのリセットとして扱い、プロジェクト全体の個別指定は適用しない。
+        // When the type specifies Style, it is treated as a reset to the preset and project wide individual settings are not applied.
+        if (local.Style == StyleOption.Inherit)
+        {
+            resolved = Merge(resolved, global);
+        }
+        resolved = Merge(resolved, local);
+
+        var openBracket = ResolveBracket(resolved.Bracket, resolved.OpenBracket, true);
+        var closeBracket = ResolveBracket(resolved.Bracket, resolved.CloseBracket, false);
+        var collectionOpenBracket = ResolveBracket(resolved.CollectionBracket, resolved.CollectionOpenBracket, true);
+        var collectionCloseBracket = ResolveBracket(resolved.CollectionBracket, resolved.CollectionCloseBracket, false);
+
+        var typeName = resolved.TypeName;
+        var hasBracket = (openBracket.Length > 0) || (closeBracket.Length > 0);
+        var hasCollectionBracket = (collectionOpenBracket.Length > 0) || (collectionCloseBracket.Length > 0);
+
+        return new SettingsModel(
+            typeName,
+            resolved.TypeArgument,
+            resolved.Null,
+            resolved.NullLiteral ?? string.Empty,
+            resolved.Collection,
+            resolved.CollectionLimit,
+            resolved.Members,
+            openBracket,
+            closeBracket,
+            hasBracket ? ResolveSpace(resolved.InnerSpace) : string.Empty,
+            typeName != TypeNameOption.None ? ResolveSpace(resolved.TypeNameSpace) : string.Empty,
+            resolved.Separator ?? string.Empty,
+            resolved.Assign ?? string.Empty,
+            collectionOpenBracket,
+            collectionCloseBracket,
+            hasCollectionBracket ? ResolveSpace(resolved.CollectionInnerSpace) : string.Empty,
+            resolved.CollectionSeparator ?? string.Empty);
+    }
+
+    private static OptionModel GetPreset(StyleOption style) =>
+        style == StyleOption.Record
+            ? new OptionModel(
+                StyleOption.Record,
+                TypeNameOption.Simple,
+                TypeArgumentOption.None,
+                NullOption.Empty,
+                "null",
+                CollectionOption.Raw,
+                -1,
+                MemberKindOption.PropertyAndField,
+                BracketOption.Brace,
+                null,
+                null,
+                SpaceOption.Space,
+                SpaceOption.Space,
+                ", ",
+                " = ",
+                BracketOption.Square,
+                null,
+                null,
+                SpaceOption.None,
+                ", ")
+            : new OptionModel(
+                StyleOption.Default,
+                TypeNameOption.Simple,
+                TypeArgumentOption.Include,
+                NullOption.Literal,
+                "null",
+                CollectionOption.Expand,
+                -1,
+                MemberKindOption.Property,
+                BracketOption.Brace,
+                null,
+                null,
+                SpaceOption.Space,
+                SpaceOption.Space,
+                ", ",
+                " = ",
+                BracketOption.Square,
+                null,
+                null,
+                SpaceOption.None,
+                ", ");
+
+    private static OptionModel Merge(OptionModel baseModel, OptionModel overrideModel) =>
+        new(
+            baseModel.Style,
+            overrideModel.TypeName != TypeNameOption.Inherit ? overrideModel.TypeName : baseModel.TypeName,
+            overrideModel.TypeArgument != TypeArgumentOption.Inherit ? overrideModel.TypeArgument : baseModel.TypeArgument,
+            overrideModel.Null != NullOption.Inherit ? overrideModel.Null : baseModel.Null,
+            !String.IsNullOrEmpty(overrideModel.NullLiteral) ? overrideModel.NullLiteral : baseModel.NullLiteral,
+            overrideModel.Collection != CollectionOption.Inherit ? overrideModel.Collection : baseModel.Collection,
+            overrideModel.CollectionLimit != 0 ? overrideModel.CollectionLimit : baseModel.CollectionLimit,
+            overrideModel.Members != MemberKindOption.Inherit ? overrideModel.Members : baseModel.Members,
+            overrideModel.Bracket != BracketOption.Inherit ? overrideModel.Bracket : baseModel.Bracket,
+            !String.IsNullOrEmpty(overrideModel.OpenBracket) ? overrideModel.OpenBracket : baseModel.OpenBracket,
+            !String.IsNullOrEmpty(overrideModel.CloseBracket) ? overrideModel.CloseBracket : baseModel.CloseBracket,
+            overrideModel.InnerSpace != SpaceOption.Inherit ? overrideModel.InnerSpace : baseModel.InnerSpace,
+            overrideModel.TypeNameSpace != SpaceOption.Inherit ? overrideModel.TypeNameSpace : baseModel.TypeNameSpace,
+            !String.IsNullOrEmpty(overrideModel.Separator) ? overrideModel.Separator : baseModel.Separator,
+            !String.IsNullOrEmpty(overrideModel.Assign) ? overrideModel.Assign : baseModel.Assign,
+            overrideModel.CollectionBracket != BracketOption.Inherit ? overrideModel.CollectionBracket : baseModel.CollectionBracket,
+            !String.IsNullOrEmpty(overrideModel.CollectionOpenBracket) ? overrideModel.CollectionOpenBracket : baseModel.CollectionOpenBracket,
+            !String.IsNullOrEmpty(overrideModel.CollectionCloseBracket) ? overrideModel.CollectionCloseBracket : baseModel.CollectionCloseBracket,
+            overrideModel.CollectionInnerSpace != SpaceOption.Inherit ? overrideModel.CollectionInnerSpace : baseModel.CollectionInnerSpace,
+            !String.IsNullOrEmpty(overrideModel.CollectionSeparator) ? overrideModel.CollectionSeparator : baseModel.CollectionSeparator);
+
+    private static string ResolveBracket(BracketOption bracket, string? value, bool open)
+    {
+        if (!String.IsNullOrEmpty(value))
+        {
+            return value!;
+        }
+
+        return bracket switch
+        {
+            BracketOption.Brace => open ? "{" : "}",
+            BracketOption.Parenthesis => open ? "(" : ")",
+            BracketOption.Square => open ? "[" : "]",
+            BracketOption.Angle => open ? "<" : ">",
+            _ => string.Empty
+        };
+    }
+
+    private static string ResolveSpace(SpaceOption space) =>
+        space == SpaceOption.Space ? " " : string.Empty;
+
+    // ------------------------------------------------------------
+    // Model
+    // ------------------------------------------------------------
 
     private static Result<TypeModel> GetTypeModel(GeneratorAttributeSyntaxContext context)
     {
-        var syntax = (ClassDeclarationSyntax)context.TargetNode;
+        var syntax = (TypeDeclarationSyntax)context.TargetNode;
         var symbol = (INamedTypeSymbol)context.TargetSymbol;
 
         if (!syntax.Modifiers.Any(static x => x.IsKind(SyntaxKind.PartialKeyword)))
@@ -108,67 +340,114 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         }
         containingTypes?.Reverse();
 
-        var properties = new List<PropertyModel>();
-        var seenNames = new HashSet<string>(StringComparer.Ordinal);
-        var currentSymbol = symbol;
-        while (currentSymbol is not null)
-        {
-            foreach (var member in currentSymbol.GetMembers().OfType<IPropertySymbol>())
-            {
-                // インデクサは this.<Name> でアクセスできないため対象外
-                // Indexers are excluded because they cannot be accessed via this.<Name>
-                if (member.IsIndexer)
-                {
-                    continue;
-                }
-
-                // this.<Name> は最派生の宣言に束縛されるため、隠蔽された基底側の同名プロパティは収集しない。
-                // 可視性 / IgnoreToString 判定より前で登録するのは意図的: 派生の private / ignore な new 隠蔽でも、
-                // this.<Name> から到達できない基底 public を誤って拾わず、隠蔽 / ignore したメンバの値を出力しない。
-                // Since this.<Name> binds to the most-derived declaration, a hidden base property of the same name is not collected.
-                // Registering before the visibility / IgnoreToString check is intentional: even for a derived private / ignored new-hiding member,
-                // this avoids wrongly picking up a base public unreachable from this.<Name>, and avoids outputting the value of a hidden / ignored member.
-                if (!seenNames.Add(member.Name))
-                {
-                    continue;
-                }
-
-                if (member.DeclaredAccessibility != Accessibility.Public)
-                {
-                    continue;
-                }
-
-                if (member.GetMethod is null)
-                {
-                    continue;
-                }
-
-                if (member.IsWriteOnly)
-                {
-                    continue;
-                }
-
-                if (member.GetAttributes().Any(attr => attr.AttributeClass?.ToDisplayString() == IgnoreAttributeName))
-                {
-                    continue;
-                }
-
-                properties.Add(GetPropertyModel(member));
-            }
-            currentSymbol = currentSymbol.BaseType;
-        }
+        var attr = symbol.GetAttributes()
+            .First(static x => x.AttributeClass?.ToDisplayString() == GenerateAttributeName);
 
         return Results.Success(new TypeModel(
             ns,
             new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
             symbol.GetClassName(),
+            symbol.Name,
+            MakeFullName(symbol, ns),
+            new EquatableArray<string>(symbol.TypeParameters.Select(static x => x.Name).ToArray()),
             symbol.IsValueType,
-            new EquatableArray<PropertyModel>(properties.ToArray())));
+            GetAttributeOptions(attr),
+            new EquatableArray<MemberModel>(CollectMembers(symbol).ToArray())));
     }
 
-    private static PropertyModel GetPropertyModel(IPropertySymbol symbol)
+    private static List<MemberModel> CollectMembers(INamedTypeSymbol symbol)
     {
-        var (hasElements, isNullAssignable) = GetPropertyType(symbol.Type);
+        var levels = new List<List<MemberModel>>();
+        var seenNames = new HashSet<string>(StringComparer.Ordinal);
+        var currentSymbol = symbol;
+        while (currentSymbol is not null)
+        {
+            var members = new List<MemberModel>();
+            foreach (var member in currentSymbol.GetMembers())
+            {
+                // static メンバは this.<Name> でアクセスできないため対象外
+                // Static members are excluded because they cannot be accessed via this.<Name>
+                if (member.IsStatic)
+                {
+                    continue;
+                }
+
+                if (member is IPropertySymbol property)
+                {
+                    // インデクサは this.<Name> でアクセスできないため対象外
+                    // Indexers are excluded because they cannot be accessed via this.<Name>
+                    if (property.IsIndexer)
+                    {
+                        continue;
+                    }
+
+                    // this.<Name> は最派生の宣言に束縛されるため、隠蔽された基底側の同名メンバは収集しない。
+                    // 可視性 / IgnoreToString 判定より前で登録するのは意図的: 派生の private / ignore な new 隠蔽でも、
+                    // this.<Name> から到達できない基底 public を誤って拾わず、隠蔽 / ignore したメンバの値を出力しない。
+                    // Since this.<Name> binds to the most-derived declaration, a hidden base member of the same name is not collected.
+                    // Registering before the visibility / IgnoreToString check is intentional: even for a derived private / ignored new-hiding member,
+                    // this avoids wrongly picking up a base public unreachable from this.<Name>, and avoids outputting the value of a hidden / ignored member.
+                    if (!seenNames.Add(property.Name))
+                    {
+                        continue;
+                    }
+
+                    if ((property.DeclaredAccessibility != Accessibility.Public) ||
+                        (property.GetMethod is null) ||
+                        property.IsWriteOnly ||
+                        HasIgnore(property))
+                    {
+                        continue;
+                    }
+
+                    members.Add(GetMemberModel(property, property.Type, false));
+                }
+                else if (member is IFieldSymbol field)
+                {
+                    // 自動プロパティのバッキングフィールド等、コンパイラが生成したフィールドは対象外
+                    // Compiler generated fields such as auto property backing fields are excluded
+                    if (field.IsImplicitlyDeclared || (field.AssociatedSymbol is not null))
+                    {
+                        continue;
+                    }
+
+                    if (!seenNames.Add(field.Name))
+                    {
+                        continue;
+                    }
+
+                    if ((field.DeclaredAccessibility != Accessibility.Public) || HasIgnore(field))
+                    {
+                        continue;
+                    }
+
+                    members.Add(GetMemberModel(field, field.Type, true));
+                }
+            }
+
+            levels.Add(members);
+            currentSymbol = currentSymbol.BaseType;
+        }
+
+        // record と同じく基底型のメンバを先に出力する
+        // Base type members are output first, same as record
+        levels.Reverse();
+
+        var result = new List<MemberModel>();
+        foreach (var level in levels)
+        {
+            result.AddRange(level);
+        }
+
+        return result;
+    }
+
+    private static bool HasIgnore(ISymbol symbol) =>
+        symbol.GetAttributes().Any(static x => x.AttributeClass?.ToDisplayString() == IgnoreAttributeName);
+
+    private static MemberModel GetMemberModel(ISymbol symbol, ITypeSymbol type, bool isField)
+    {
+        var (hasElements, isNullAssignable, isElementNullAssignable) = GetMemberType(type);
 
         string? format = null;
         int? maxLength = null;
@@ -201,31 +480,35 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             }
         }
 
-        return new PropertyModel(
+        return new MemberModel(
             symbol.Name,
+            isField,
             hasElements,
             isNullAssignable,
+            isElementNullAssignable,
             format,
             maxLength,
             mask,
             maskShow);
     }
 
-    private static (bool HasElements, bool IsNullAssignable) GetPropertyType(ITypeSymbol typeSymbol)
+    private static (bool HasElements, bool IsNullAssignable, bool IsElementNullAssignable) GetMemberType(ITypeSymbol typeSymbol)
     {
+        var isNullAssignable = typeSymbol.IsReferenceType || typeSymbol.IsGenericType();
+
         if (!typeSymbol.SpecialType.Equals(SpecialType.System_String))
         {
             if (typeSymbol is IArrayTypeSymbol arrayTypeSymbol)
             {
                 var elementType = arrayTypeSymbol.ElementType;
-                return (true, elementType.IsReferenceType || elementType.IsGenericType());
+                return (true, isNullAssignable, elementType.IsReferenceType || elementType.IsGenericType());
             }
 
             if (typeSymbol is INamedTypeSymbol { IsGenericType: true } namedTypeSymbol &&
                 (namedTypeSymbol.ConstructedFrom.ToDisplayString() == GenericEnumerableName))
             {
                 var elementType = namedTypeSymbol.TypeArguments[0];
-                return (true, elementType.IsReferenceType || elementType.IsGenericType());
+                return (true, isNullAssignable, elementType.IsReferenceType || elementType.IsGenericType());
             }
 
             foreach (var @interface in typeSymbol.AllInterfaces)
@@ -233,12 +516,12 @@ public sealed class ToStringGenerator : IIncrementalGenerator
                 if (@interface.IsGenericType && (@interface.ConstructedFrom.ToDisplayString() == GenericEnumerableName))
                 {
                     var elementType = @interface.TypeArguments[0];
-                    return (true, elementType.IsReferenceType || elementType.IsGenericType());
+                    return (true, isNullAssignable, elementType.IsReferenceType || elementType.IsGenericType());
                 }
             }
         }
 
-        return (false, typeSymbol.IsReferenceType || typeSymbol.IsGenericType());
+        return (false, isNullAssignable, false);
     }
 
     // ------------------------------------------------------------
@@ -253,19 +536,21 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         }
     }
 
-    private static void Execute(SourceProductionContext context, GeneratorOptions options, TypeModel type)
+    private static void Execute(SourceProductionContext context, OptionModel options, TypeModel type)
     {
         context.CancellationToken.ThrowIfCancellationRequested();
 
+        var settings = ResolveSettings(options, type.Options);
+
         var builder = new SourceBuilder();
-        BuildSource(builder, options, type);
+        BuildSource(builder, settings, type);
 
         var filename = MakeFilename(type.Namespace, type.ContainingTypes, type.ClassName);
         var source = builder.ToString();
         context.AddSource(filename, SourceText.From(source, Encoding.UTF8));
     }
 
-    private static void BuildSource(SourceBuilder builder, GeneratorOptions options, TypeModel type)
+    private static void BuildSource(SourceBuilder builder, SettingsModel settings, TypeModel type)
     {
         var containingTypes = type.ContainingTypes;
 
@@ -302,135 +587,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         builder.BeginScope();
 
         // Method
-        builder
-            .Indent()
-            .Append("public override string ToString()")
-            .NewLine();
-        builder.BeginScope();
-
-        builder
-            .Indent()
-            .Append("var handler = new global::System.Runtime.CompilerServices.DefaultInterpolatedStringHandler(0, 0, default, stackalloc char[256]);")
-            .NewLine();
-        if (options.OutputClassName)
-        {
-            builder
-                .Indent()
-                .Append("handler.AppendLiteral(\"")
-                .Append(type.ClassName)
-                .Append(" \");")
-                .NewLine();
-        }
-        builder
-            .Indent()
-            .Append("handler.AppendLiteral(\"{ \");")
-            .NewLine();
-
-        var firstProperty = true;
-        foreach (var property in type.Properties)
-        {
-            if (firstProperty)
-            {
-                firstProperty = false;
-            }
-            else
-            {
-                builder
-                    .Indent()
-                    .Append("handler.AppendLiteral(\", \");")
-                    .NewLine();
-            }
-
-            builder.Indent()
-                .Append("handler.AppendLiteral(\"")
-                .Append(property.Name)
-                .Append(" = \");")
-                .NewLine();
-
-            if (property.HasElements)
-            {
-                builder
-                    .Indent()
-                    .Append("if (this.")
-                    .Append(property.Name)
-                    .Append(" is not null)")
-                    .NewLine();
-                builder.BeginScope();
-
-                BuildAppendLiteral(builder, "[");
-
-                BuildAppendJoinedFormatted(builder, property.Name, property.IsNullAssignable, options.NullLiteral);
-
-                BuildAppendLiteral(builder, "]");
-
-                builder.EndScope();
-
-                if (!String.IsNullOrEmpty(options.NullLiteral))
-                {
-                    builder
-                        .Indent()
-                        .Append("else")
-                        .NewLine();
-                    builder.BeginScope();
-
-                    BuildAppendLiteral(builder, options.NullLiteral!);
-
-                    builder.EndScope();
-                }
-            }
-            else if (property.Mask || property.MaxLength.HasValue)
-            {
-                BuildAppendMasked(builder, property, options.NullLiteral);
-            }
-            else
-            {
-                if (property.IsNullAssignable)
-                {
-                    if (!String.IsNullOrEmpty(options.NullLiteral))
-                    {
-                        builder
-                            .Indent()
-                            .Append("if (this.")
-                            .Append(property.Name)
-                            .Append(" is not null)")
-                            .NewLine();
-                        builder.BeginScope();
-
-                        BuildAppendProperty(builder, property.Name, property.Format);
-
-                        builder.EndScope();
-                        builder
-                            .Indent()
-                            .Append("else")
-                            .NewLine();
-                        builder.BeginScope();
-
-                        BuildAppendLiteral(builder, options.NullLiteral!);
-
-                        builder.EndScope();
-                    }
-                    else
-                    {
-                        BuildAppendProperty(builder, property.Name, property.Format);
-                    }
-                }
-                else
-                {
-                    BuildAppendProperty(builder, property.Name, property.Format);
-                }
-            }
-        }
-
-        builder
-            .Indent()
-            .Append("handler.AppendLiteral(\" }\");")
-            .NewLine();
-        builder
-            .Indent()
-            .Append("return handler.ToStringAndClear();")
-            .NewLine();
-
-        builder.EndScope();
+        BuildMember(builder, settings, type);
 
         builder.EndScope();
 
@@ -441,18 +598,390 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         }
     }
 
-    private static void BuildAppendProperty(SourceBuilder builder, string name, string? format)
+    private static void BuildMember(SourceBuilder builder, SettingsModel settings, TypeModel type)
+    {
+        var members = new List<MemberModel>();
+        foreach (var member in type.Members)
+        {
+            if (member.IsField && (settings.Members != MemberKindOption.PropertyAndField))
+            {
+                continue;
+            }
+
+            members.Add(member);
+        }
+
+        var typeName = settings.TypeName switch
+        {
+            TypeNameOption.Simple => type.SimpleName,
+            TypeNameOption.Full => type.FullName,
+            _ => string.Empty
+        };
+
+        // 型引数はコンパイル時に確定しないため、typeof(T) から実行時に組み立てて static readonly に保持する。
+        // Since type arguments are not known at compile time, the name is built from typeof(T) at runtime and held in a static readonly field.
+        var useTypeArgument = (settings.TypeArgument == TypeArgumentOption.Include) &&
+                              (settings.TypeName != TypeNameOption.None) &&
+                              (type.TypeParameters.Count > 0);
+
+        // 先頭リテラルは型名に続く部分。型引数を使う場合はキャッシュへ畳み込む。
+        // The head literal follows the type name. It is folded into the cache when type arguments are used.
+        var head = new StringBuilder();
+        head.Append(settings.TypeNameSpace).Append(settings.OpenBracket).Append(settings.InnerSpace);
+        if (members.Count == 0)
+        {
+            head.Append(settings.CloseBracket);
+        }
+        else
+        {
+            head.Append(members[0].Name).Append(settings.Assign);
+        }
+
+        if (useTypeArgument)
+        {
+            BuildTypeNameCache(builder, type, typeName, head.ToString());
+            builder.NewLine();
+        }
+
+        builder
+            .Indent()
+            .Append("public override string ToString()")
+            .NewLine();
+        builder.BeginScope();
+
+        // 出力対象が無い場合は組み立て済みの文字列を返す。開始括弧と終了括弧の内側スペースは 1 つに畳まれる。
+        // When there is no member to output, a prepared string is returned. The inner space is collapsed into one.
+        if (members.Count == 0)
+        {
+            builder.Indent().Append("return ");
+            if (useTypeArgument)
+            {
+                builder.Append(TypeNameCacheField).Append(";").NewLine();
+            }
+            else
+            {
+                builder.Append("\"").Append(EscapeString(typeName + head)).Append("\";").NewLine();
+            }
+
+            builder.EndScope();
+            return;
+        }
+
+        builder
+            .Indent()
+            .Append("var handler = new global::System.Runtime.CompilerServices.DefaultInterpolatedStringHandler(0, 0, default, stackalloc char[256]);")
+            .NewLine();
+
+        if (useTypeArgument)
+        {
+            builder.Indent().Append("handler.AppendLiteral(").Append(TypeNameCacheField).Append(");").NewLine();
+        }
+        else
+        {
+            BuildAppendLiteral(builder, typeName + head);
+        }
+
+        BuildMemberValue(builder, settings, members[0]);
+
+        var pending = new StringBuilder();
+        for (var i = 1; i < members.Count; i++)
+        {
+            var member = members[i];
+            pending.Append(settings.Separator).Append(member.Name).Append(settings.Assign);
+
+            FlushLiteral(builder, pending);
+
+            BuildMemberValue(builder, settings, member);
+        }
+
+        pending.Append(settings.InnerSpace).Append(settings.CloseBracket);
+        FlushLiteral(builder, pending);
+
+        builder
+            .Indent()
+            .Append("return handler.ToStringAndClear();")
+            .NewLine();
+
+        builder.EndScope();
+    }
+
+    private static void BuildTypeNameCache(SourceBuilder builder, TypeModel type, string typeName, string head)
+    {
+        builder
+            .Indent()
+            .Append("private static readonly string ")
+            .Append(TypeNameCacheField)
+            .Append(" = \"")
+            .Append(EscapeString(typeName))
+            .Append("<\"");
+        var firstParameter = true;
+        foreach (var typeParameter in type.TypeParameters)
+        {
+            if (firstParameter)
+            {
+                firstParameter = false;
+            }
+            else
+            {
+                builder.Append(" + \", \"");
+            }
+
+            builder
+                .Append(" + ")
+                .Append(TypeNameFormatMethod)
+                .Append("(typeof(")
+                .Append(typeParameter)
+                .Append("))");
+        }
+        builder
+            .Append(" + \">")
+            .Append(EscapeString(head))
+            .Append("\";")
+            .NewLine();
+        builder.NewLine();
+
+        builder
+            .Indent()
+            .Append("private static string ")
+            .Append(TypeNameFormatMethod)
+            .Append("(global::System.Type type)")
+            .NewLine();
+        builder.BeginScope();
+
+        builder.Indent().Append("if (type.IsArray)").NewLine();
+        builder.BeginScope();
+        builder
+            .Indent()
+            .Append("return ")
+            .Append(TypeNameFormatMethod)
+            .Append("(type.GetElementType()!) + \"[\" + new string(',', type.GetArrayRank() - 1) + \"]\";")
+            .NewLine();
+        builder.EndScope();
+
+        builder.Indent().Append("var underlying = global::System.Nullable.GetUnderlyingType(type);").NewLine();
+        builder.Indent().Append("if (underlying is not null)").NewLine();
+        builder.BeginScope();
+        builder.Indent().Append("return ").Append(TypeNameFormatMethod).Append("(underlying) + \"?\";").NewLine();
+        builder.EndScope();
+
+        foreach (var keyword in PrimitiveTypeNames)
+        {
+            builder
+                .Indent()
+                .Append("if (type == typeof(")
+                .Append(keyword)
+                .Append(")) { return \"")
+                .Append(keyword)
+                .Append("\"; }")
+                .NewLine();
+        }
+
+        builder.Indent().Append("if (!type.IsGenericType)").NewLine();
+        builder.BeginScope();
+        builder.Indent().Append("return type.Name;").NewLine();
+        builder.EndScope();
+
+        builder.Indent().Append("var name = type.Name;").NewLine();
+        builder.Indent().Append("var index = name.IndexOf('`');").NewLine();
+        builder.Indent().Append("if (index >= 0) { name = name.Substring(0, index); }").NewLine();
+        builder.Indent().Append("var arguments = type.GetGenericArguments();").NewLine();
+        builder.Indent().Append("var buffer = new global::System.Text.StringBuilder(name);").NewLine();
+        builder.Indent().Append("buffer.Append('<');").NewLine();
+        builder.Indent().Append("for (var i = 0; i < arguments.Length; i++)").NewLine();
+        builder.BeginScope();
+        builder.Indent().Append("if (i > 0) { buffer.Append(\", \"); }").NewLine();
+        builder.Indent().Append("buffer.Append(").Append(TypeNameFormatMethod).Append("(arguments[i]));").NewLine();
+        builder.EndScope();
+        builder.Indent().Append("buffer.Append('>');").NewLine();
+        builder.Indent().Append("return buffer.ToString();").NewLine();
+
+        builder.EndScope();
+    }
+
+    private static void BuildMemberValue(SourceBuilder builder, SettingsModel settings, MemberModel member)
+    {
+        // マスク指定はコレクション展開より優先する。展開すると要素の値がそのまま出力されてしまうため。
+        // Mask takes precedence over collection expansion, otherwise the element values would be written as is.
+        if (member.Mask)
+        {
+            BuildAppendMasked(builder, settings, member);
+        }
+        else if (member.HasElements && (settings.Collection == CollectionOption.Expand))
+        {
+            BuildAppendCollection(builder, settings, member);
+        }
+        else if (member.MaxLength.HasValue)
+        {
+            BuildAppendMasked(builder, settings, member);
+        }
+        else if (member.IsNullAssignable && (settings.Null == NullOption.Literal))
+        {
+            builder
+                .Indent()
+                .Append("if (this.")
+                .Append(member.Name)
+                .Append(" is not null)")
+                .NewLine();
+            builder.BeginScope();
+
+            BuildAppendFormatted(builder, member);
+
+            builder.EndScope();
+            builder
+                .Indent()
+                .Append("else")
+                .NewLine();
+            builder.BeginScope();
+
+            BuildAppendLiteral(builder, settings.NullLiteral);
+
+            builder.EndScope();
+        }
+        else
+        {
+            // null の場合 AppendFormatted は何も追加しないため、record と同じく空文字になる
+            // AppendFormatted appends nothing for null, which results in an empty string same as record
+            BuildAppendFormatted(builder, member);
+        }
+    }
+
+    private static void BuildAppendCollection(SourceBuilder builder, SettingsModel settings, MemberModel member)
+    {
+        if (member.IsNullAssignable)
+        {
+            builder
+                .Indent()
+                .Append("if (this.")
+                .Append(member.Name)
+                .Append(" is not null)")
+                .NewLine();
+            builder.BeginScope();
+
+            BuildCollectionBody(builder, settings, member);
+
+            builder.EndScope();
+
+            if (settings.Null == NullOption.Literal)
+            {
+                builder
+                    .Indent()
+                    .Append("else")
+                    .NewLine();
+                builder.BeginScope();
+
+                BuildAppendLiteral(builder, settings.NullLiteral);
+
+                builder.EndScope();
+            }
+        }
+        else
+        {
+            // 要素の列挙に使う変数名が同一メソッド内で衝突しないようにスコープを作る
+            // A scope is created so that the variable used for enumeration does not conflict within the same method
+            builder.BeginScope();
+
+            BuildCollectionBody(builder, settings, member);
+
+            builder.EndScope();
+        }
+    }
+
+    private static void BuildCollectionBody(SourceBuilder builder, SettingsModel settings, MemberModel member)
+    {
+        var limited = settings.CollectionLimit > 0;
+        var hasInnerSpace = settings.CollectionInnerSpace.Length > 0;
+
+        BuildAppendLiteral(builder, settings.CollectionOpenBracket);
+
+        builder
+            .Indent()
+            .Append(limited || hasInnerSpace ? "var itemIndex = 0;" : "var firstItem = true;")
+            .NewLine();
+        builder
+            .Indent()
+            .Append("foreach (var item in this.")
+            .Append(member.Name)
+            .Append(")")
+            .NewLine();
+        builder.BeginScope();
+
+        if (limited || hasInnerSpace)
+        {
+            builder.Indent().Append("if (itemIndex > 0) { handler.AppendLiteral(\"").Append(EscapeString(settings.CollectionSeparator)).Append("\"); }");
+            if (hasInnerSpace)
+            {
+                builder.Append(" else { handler.AppendLiteral(\"").Append(EscapeString(settings.CollectionInnerSpace)).Append("\"); }");
+            }
+            builder.NewLine();
+
+            if (limited)
+            {
+                builder
+                    .Indent()
+                    .Append("if (itemIndex == ")
+                    .Append(settings.CollectionLimit.ToString(CultureInfo.InvariantCulture))
+                    .Append(") { handler.AppendLiteral(\"")
+                    .Append(EllipsisLiteral)
+                    .Append("\"); break; }")
+                    .NewLine();
+            }
+
+            builder.Indent().Append("itemIndex++;").NewLine();
+        }
+        else
+        {
+            builder
+                .Indent()
+                .Append("if (firstItem) { firstItem = false; } else { handler.AppendLiteral(\"")
+                .Append(EscapeString(settings.CollectionSeparator))
+                .Append("\"); }")
+                .NewLine();
+        }
+
+        if (member.IsElementNullAssignable && (settings.Null == NullOption.Literal))
+        {
+            builder
+                .Indent()
+                .Append("if (item is not null) { handler.AppendFormatted(item); } else { handler.AppendLiteral(\"")
+                .Append(EscapeString(settings.NullLiteral))
+                .Append("\"); }")
+                .NewLine();
+        }
+        else
+        {
+            builder
+                .Indent()
+                .Append("handler.AppendFormatted(item);")
+                .NewLine();
+        }
+
+        builder.EndScope();
+
+        if (hasInnerSpace)
+        {
+            builder
+                .Indent()
+                .Append("if (itemIndex > 0) { handler.AppendLiteral(\"")
+                .Append(EscapeString(settings.CollectionInnerSpace))
+                .Append("\"); }")
+                .NewLine();
+        }
+
+        BuildAppendLiteral(builder, settings.CollectionCloseBracket);
+    }
+
+    private static void BuildAppendFormatted(SourceBuilder builder, MemberModel member)
     {
         builder
             .Indent()
             .Append("handler.AppendFormatted(")
             .Append("this.")
-            .Append(name);
-        if (!String.IsNullOrEmpty(format))
+            .Append(member.Name);
+        if (!String.IsNullOrEmpty(member.Format))
         {
             builder
                 .Append(", \"")
-                .Append(EscapeString(format!))
+                .Append(EscapeString(member.Format!))
                 .Append("\"");
         }
         builder
@@ -460,69 +989,69 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             .NewLine();
     }
 
-    private static void BuildAppendMasked(SourceBuilder builder, PropertyModel property, string? nullLiteral)
+    private static void BuildAppendMasked(SourceBuilder builder, SettingsModel settings, MemberModel member)
     {
         builder.BeginScope();
 
         builder.Indent().Append("var value = ");
-        if (!property.Mask && !String.IsNullOrEmpty(property.Format))
+        if (!member.Mask && !String.IsNullOrEmpty(member.Format))
         {
             builder
                 .Append("this.")
-                .Append(property.Name)
+                .Append(member.Name)
                 .Append(" is global::System.IFormattable formattable ? formattable.ToString(\"")
-                .Append(EscapeString(property.Format!))
+                .Append(EscapeString(member.Format!))
                 .Append("\", null) : this.")
-                .Append(property.Name)
-                .Append(property.IsNullAssignable ? "?.ToString();" : ".ToString();")
+                .Append(member.Name)
+                .Append(member.IsNullAssignable ? "?.ToString();" : ".ToString();")
                 .NewLine();
         }
         else
         {
             builder
                 .Append("this.")
-                .Append(property.Name)
-                .Append(property.IsNullAssignable ? "?.ToString();" : ".ToString();")
+                .Append(member.Name)
+                .Append(member.IsNullAssignable ? "?.ToString();" : ".ToString();")
                 .NewLine();
         }
 
         builder.Indent().Append("if (value is null)").NewLine();
         builder.BeginScope();
-        if (!String.IsNullOrEmpty(nullLiteral))
+        if (settings.Null == NullOption.Literal)
         {
-            BuildAppendLiteral(builder, nullLiteral!);
+            BuildAppendLiteral(builder, settings.NullLiteral);
         }
         builder.EndScope();
         builder.Indent().Append("else").NewLine();
         builder.BeginScope();
 
-        if (property.Mask)
+        if (member.Mask)
         {
-            if (property.MaskShow > 0)
+            if (member.MaskShow > 0)
             {
                 builder
                     .Indent()
                     .Append("if (value.Length > ")
-                    .Append(property.MaskShow.ToString(CultureInfo.InvariantCulture))
+                    .Append(member.MaskShow.ToString(CultureInfo.InvariantCulture))
                     .Append(")")
                     .NewLine();
                 builder.BeginScope();
-                BuildAppendLiteral(builder, "***");
+                BuildAppendLiteral(builder, MaskLiteral);
                 builder
                     .Indent()
                     .Append("handler.AppendFormatted(value.Substring(value.Length - ")
-                    .Append(property.MaskShow.ToString(CultureInfo.InvariantCulture))
+                    .Append(member.MaskShow.ToString(CultureInfo.InvariantCulture))
                     .Append("));")
                     .NewLine();
                 builder.EndScope();
                 builder.Indent().Append("else").NewLine();
                 builder.BeginScope();
-                BuildAppendLiteral(builder, "***");
+                BuildAppendLiteral(builder, MaskLiteral);
                 builder.EndScope();
             }
             else
             {
-                BuildAppendLiteral(builder, "***");
+                BuildAppendLiteral(builder, MaskLiteral);
             }
         }
         else
@@ -530,14 +1059,14 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             builder
                 .Indent()
                 .Append("if (value.Length > ")
-                .Append(property.MaxLength!.Value.ToString(CultureInfo.InvariantCulture))
+                .Append(member.MaxLength!.Value.ToString(CultureInfo.InvariantCulture))
                 .Append(")")
                 .NewLine();
             builder.BeginScope();
             builder
                 .Indent()
                 .Append("handler.AppendFormatted(value.Substring(0, ")
-                .Append(property.MaxLength!.Value.ToString(CultureInfo.InvariantCulture))
+                .Append(member.MaxLength!.Value.ToString(CultureInfo.InvariantCulture))
                 .Append("));")
                 .NewLine();
             builder.EndScope();
@@ -552,61 +1081,72 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         builder.EndScope();
     }
 
-    private static string EscapeString(string value) =>
-        value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    private static void FlushLiteral(SourceBuilder builder, StringBuilder pending)
+    {
+        if (pending.Length == 0)
+        {
+            return;
+        }
+
+        BuildAppendLiteral(builder, pending.ToString());
+        pending.Clear();
+    }
 
     private static void BuildAppendLiteral(SourceBuilder builder, string literal)
     {
+        if (literal.Length == 0)
+        {
+            return;
+        }
+
         builder
             .Indent()
             .Append("handler.AppendLiteral(\"")
-            .Append(literal)
+            .Append(EscapeString(literal))
             .Append("\");")
             .NewLine();
-    }
-
-    private static void BuildAppendJoinedFormatted(SourceBuilder builder, string name, bool isNullAssignable, string? nullLiteral)
-    {
-        builder
-            .Indent()
-            .Append("var firstItem = true;")
-            .NewLine();
-        builder
-            .Indent()
-            .Append("foreach (var item in this.")
-            .Append(name)
-            .Append(")")
-            .NewLine();
-        builder.BeginScope();
-
-        builder
-            .Indent()
-            .Append("if (firstItem) { firstItem = false; } else { handler.AppendLiteral(\", \"); }")
-            .NewLine();
-
-        if (isNullAssignable && !String.IsNullOrEmpty(nullLiteral))
-        {
-            builder
-                .Indent()
-                .Append("if (item is not null) { handler.AppendFormatted(item); } else { handler.AppendLiteral(\"")
-                .Append(nullLiteral!)
-                .Append("\"); }")
-                .NewLine();
-        }
-        else
-        {
-            builder
-                .Indent()
-                .Append("handler.AppendFormatted(item);")
-                .NewLine();
-        }
-
-        builder.EndScope();
     }
 
     // ------------------------------------------------------------
     // Helper
     // ------------------------------------------------------------
+
+    private static string EscapeString(string value) =>
+        value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
+    private static string MakeFullName(INamedTypeSymbol symbol, string ns)
+    {
+        var buffer = new StringBuilder();
+
+        if (!String.IsNullOrEmpty(ns))
+        {
+            buffer.Append(ns);
+            buffer.Append('.');
+        }
+
+        var names = default(List<string>?);
+        var containingSymbol = symbol.ContainingType;
+        while (containingSymbol is not null)
+        {
+            names ??= [];
+            names.Add(containingSymbol.Name);
+            containingSymbol = containingSymbol.ContainingType;
+        }
+
+        if (names is not null)
+        {
+            names.Reverse();
+            foreach (var name in names)
+            {
+                buffer.Append(name);
+                buffer.Append('.');
+            }
+        }
+
+        buffer.Append(symbol.Name);
+
+        return buffer.ToString();
+    }
 
     private static string MakeFilename(string ns, EquatableArray<ContainingTypeModel> containingTypes, string className)
     {
@@ -634,12 +1174,106 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     // Models
     // ------------------------------------------------------------
 
-    private sealed record GeneratorOptions
+    private enum StyleOption
     {
-        public bool OutputClassName { get; set; }
-
-        public string? NullLiteral { get; set; } = "null";
+        Inherit = 0,
+        Default,
+        Record
     }
+
+    private enum TypeNameOption
+    {
+        Inherit = 0,
+        None,
+        Simple,
+        Full
+    }
+
+    private enum TypeArgumentOption
+    {
+        Inherit = 0,
+        None,
+        Include
+    }
+
+    private enum NullOption
+    {
+        Inherit = 0,
+        Empty,
+        Literal
+    }
+
+    private enum CollectionOption
+    {
+        Inherit = 0,
+        Raw,
+        Expand
+    }
+
+    private enum MemberKindOption
+    {
+        Inherit = 0,
+        Property,
+        PropertyAndField
+    }
+
+    private enum BracketOption
+    {
+        Inherit = 0,
+        None,
+        Brace,
+        Parenthesis,
+        Square,
+        Angle
+    }
+
+    private enum SpaceOption
+    {
+        Inherit = 0,
+        None,
+        Space
+    }
+
+    private sealed record OptionModel(
+        StyleOption Style,
+        TypeNameOption TypeName,
+        TypeArgumentOption TypeArgument,
+        NullOption Null,
+        string? NullLiteral,
+        CollectionOption Collection,
+        int CollectionLimit,
+        MemberKindOption Members,
+        BracketOption Bracket,
+        string? OpenBracket,
+        string? CloseBracket,
+        SpaceOption InnerSpace,
+        SpaceOption TypeNameSpace,
+        string? Separator,
+        string? Assign,
+        BracketOption CollectionBracket,
+        string? CollectionOpenBracket,
+        string? CollectionCloseBracket,
+        SpaceOption CollectionInnerSpace,
+        string? CollectionSeparator);
+
+    private sealed record SettingsModel(
+        TypeNameOption TypeName,
+        TypeArgumentOption TypeArgument,
+        NullOption Null,
+        string NullLiteral,
+        CollectionOption Collection,
+        int CollectionLimit,
+        MemberKindOption Members,
+        string OpenBracket,
+        string CloseBracket,
+        string InnerSpace,
+        string TypeNameSpace,
+        string Separator,
+        string Assign,
+        string CollectionOpenBracket,
+        string CollectionCloseBracket,
+        string CollectionInnerSpace,
+        string CollectionSeparator);
 
     private sealed record ContainingTypeModel(
         string ClassName,
@@ -649,13 +1283,19 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         string Namespace,
         EquatableArray<ContainingTypeModel> ContainingTypes,
         string ClassName,
+        string SimpleName,
+        string FullName,
+        EquatableArray<string> TypeParameters,
         bool IsValueType,
-        EquatableArray<PropertyModel> Properties);
+        OptionModel Options,
+        EquatableArray<MemberModel> Members);
 
-    private sealed record PropertyModel(
+    private sealed record MemberModel(
         string Name,
+        bool IsField,
         bool HasElements,
         bool IsNullAssignable,
+        bool IsElementNullAssignable,
         string? Format,
         int? MaxLength,
         bool Mask,

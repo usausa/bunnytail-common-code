@@ -1,9 +1,26 @@
 <Project>
 
   <ItemGroup>
-    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringMode" />
-    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringOutputClassName" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringStyle" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringTypeName" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringTypeArgument" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringNull" />
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringNullLiteral" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringCollection" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringCollectionLimit" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringMembers" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringBracket" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringOpenBracket" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringCloseBracket" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringInnerSpace" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringTypeNameSpace" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringSeparator" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringAssign" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringCollectionBracket" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringCollectionOpenBracket" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringCollectionCloseBracket" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringCollectionInnerSpace" />
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringCollectionSeparator" />
   </ItemGroup>
 
 </Project>

@@ -17,11 +17,6 @@
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
   </PropertyGroup>
 
-  <PropertyGroup>
-    <CommonCodeGeneratorToStringOutputClassName>false</CommonCodeGeneratorToStringOutputClassName>
-    <CommonCodeGeneratorToStringNullLiteral>null</CommonCodeGeneratorToStringNullLiteral>
-  </PropertyGroup>
-
   <Import Project="..\BunnyTail.CommonCode.props" />
 
   <ItemGroup>
