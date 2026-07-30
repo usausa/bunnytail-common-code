@@ -71,7 +71,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         foreach (var member in symbol.GetMembers().OfType<IPropertySymbol>())
         {
             // Exclude indexers and non-public properties
-            if ((member.IsIndexer) || (member.DeclaredAccessibility != Accessibility.Public))
+            if (member.IsIndexer || (member.DeclaredAccessibility != Accessibility.Public))
             {
                 continue;
             }
