@@ -51,9 +51,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
             return Results.Error<CompareToTypeModel>(new DiagnosticInfo(Diagnostics.CompareToInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
-        var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name)
-            ? string.Empty
-            : symbol.ContainingNamespace.ToDisplayString();
+        var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name) ? string.Empty : symbol.ContainingNamespace.ToDisplayString();
 
         var containingTypes = default(List<ContainingTypeModel>?);
         var containingSymbol = symbol.ContainingType;
@@ -65,33 +63,25 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         }
         containingTypes?.Reverse();
 
-        var attr = symbol.GetAttributes()
-            .First(a => a.AttributeClass?.ToDisplayString() == GenerateAttributeName);
-
-        var generateOperators = GetBoolArg(attr, "GenerateOperators") ?? true;
+        var attributes = symbol.GetAttributes().First(a => a.AttributeClass?.ToDisplayString() == GenerateAttributeName);
+        var generateOperators = GetBoolArg(attributes, "GenerateOperators") ?? true;
 
         var keys = new List<(int Order, string Name, string TypeName)>();
         // ReSharper disable once LoopCanBeConvertedToQuery
         foreach (var member in symbol.GetMembers().OfType<IPropertySymbol>())
         {
-            // インデクサは this.<Name> でアクセスできないため対象外
-            // Indexers are excluded because they cannot be accessed via this.<Name>
-            if (member.IsIndexer)
+            // Exclude indexers and non-public properties
+            if ((member.IsIndexer) || (member.DeclaredAccessibility != Accessibility.Public))
             {
                 continue;
             }
 
-            if (member.DeclaredAccessibility != Accessibility.Public)
-            {
-                continue;
-            }
-
-            var keyAttr = member.GetAttributes()
-                .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == CompareKeyAttributeName);
+            var keyAttr = member.GetAttributes().FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == CompareKeyAttributeName);
             if (keyAttr is null)
             {
                 continue;
             }
+
             var order = GetIntArg(keyAttr, "Order") ?? 0;
             keys.Add((order, member.Name, member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
         }
@@ -239,7 +229,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         builder.Indent().Append("return 0;").NewLine();
         builder.EndScope();
 
-        // operators
+        // Operators
         if (type.GenerateOperators)
         {
             builder.NewLine();
