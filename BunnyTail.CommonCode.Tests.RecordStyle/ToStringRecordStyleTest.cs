@@ -77,7 +77,7 @@ public partial class RecordEmptyCompatData;
 [GenerateToString]
 public partial class RecordMaskData
 {
-    [ValueFormat(Mask = true)]
+    [ToStringFormat(MaskPattern = "***")]
     public string? Password { get; set; }
 }
 

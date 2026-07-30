@@ -144,20 +144,39 @@ public partial struct ToStringStructData
 #pragma warning restore CA1815
 
 [GenerateToString]
-public partial class ToStringMaskData
+public partial class ToStringMaskPatternData
 {
-    [ValueFormat(Mask = true)]
+    [ToStringFormat(MaskPattern = "***")]
     public string Password { get; set; } = default!;
 
-    [ValueFormat(Mask = true, MaskShow = 2)]
+    [ToStringFormat(MaskPattern = "[REDACTED]")]
+    public string Secret { get; set; } = default!;
+
+    [ToStringFormat(MaskPattern = "***##")]
     public string Token { get; set; } = default!;
+
+    [ToStringFormat(MaskPattern = "####****####")]
+    public string Card { get; set; } = default!;
+}
+
+[GenerateToString]
+public partial class ToStringMaskCharData
+{
+    [ToStringFormat(MaskChar = '*')]
+    public string Password { get; set; } = default!;
+
+    [ToStringFormat(MaskChar = '.')]
+    public string Secret { get; set; } = default!;
+
+    [ToStringFormat(MaskChar = '*', MaskPattern = "***")]
+    public string Both { get; set; } = default!;
 }
 
 #pragma warning disable CA1819
 [GenerateToString]
 public partial class ToStringMaskedCollectionData
 {
-    [ValueFormat(Mask = true)]
+    [ToStringFormat(MaskPattern = "***")]
     public string[]? Secrets { get; set; }
 
     public int[]? Values { get; set; }
@@ -165,19 +184,46 @@ public partial class ToStringMaskedCollectionData
 #pragma warning restore CA1819
 
 [GenerateToString]
+public partial class ToStringMaskedValueTypeData
+{
+    [ToStringFormat("000000", MaskPattern = "##****")]
+    public int Number { get; set; }
+}
+
+// Format, masking and MaxLength are applied in this order
+[GenerateToString]
+public partial class ToStringMaskWithMaxLengthData
+{
+    [ToStringFormat(MaskChar = '*', MaxLength = 4)]
+    public string Password { get; set; } = default!;
+
+    [ToStringFormat(MaskPattern = "[REDACTED]", MaxLength = 4)]
+    public string Secret { get; set; } = default!;
+
+    [ToStringFormat(MaskPattern = "####****####", MaxLength = 8)]
+    public string Card { get; set; } = default!;
+
+    [ToStringFormat(MaskPattern = "####****####", MaxLength = 2)]
+    public string Account { get; set; } = default!;
+
+    [ToStringFormat("000000", MaskChar = '*', MaxLength = 4)]
+    public int Number { get; set; }
+}
+
+[GenerateToString]
 public partial class ToStringFormatData
 {
-    [ValueFormat("000")]
+    [ToStringFormat("000")]
     public int Code { get; set; }
 
-    [ValueFormat("X4")]
+    [ToStringFormat("X4")]
     public int Hex { get; set; }
 }
 
 [GenerateToString]
 public partial class ToStringMaxLengthData
 {
-    [ValueFormat(MaxLength = 3)]
+    [ToStringFormat(MaxLength = 3)]
     public string Description { get; set; } = default!;
 
     public string Name { get; set; } = default!;
@@ -186,7 +232,7 @@ public partial class ToStringMaxLengthData
 [GenerateToString]
 public partial class ToStringFormatMaxLengthData
 {
-    [ValueFormat("000000", MaxLength = 3)]
+    [ToStringFormat("000000", MaxLength = 3)]
     public int Number { get; set; }
 }
 
@@ -362,12 +408,24 @@ public class ToStringTest
     }
 
     [Fact]
-    public void TestMask()
+    public void TestMaskPattern()
     {
         // Arrange
-        var masked = new ToStringMaskData { Password = "secret", Token = "abcd1234" };
-        var shortValue = new ToStringMaskData { Password = "x", Token = "ab" };
-        var nullValue = new ToStringMaskData();
+        var masked = new ToStringMaskPatternData
+        {
+            Password = "secret",
+            Secret = "topsecret",
+            Token = "abcd1234",
+            Card = "4111111111111111"
+        };
+        var shortValue = new ToStringMaskPatternData
+        {
+            Password = "x",
+            Secret = "y",
+            Token = "ab",
+            Card = "41111111"
+        };
+        var nullValue = new ToStringMaskPatternData();
 
         // Act
         var maskedText = masked.ToString();
@@ -375,9 +433,75 @@ public class ToStringTest
         var nullText = nullValue.ToString();
 
         // Assert
-        Assert.Equal("ToStringMaskData { Password = ***, Token = ***34 }", maskedText); // Shows only the trailing characters specified by MaskShow
-        Assert.Equal("ToStringMaskData { Password = ***, Token = *** }", shortText);    // For lengths up to MaskShow, the tail is hidden and only *** is shown
-        Assert.Equal("ToStringMaskData { Password = null, Token = null }", nullText);   // null is not masked and follows the null setting
+        // A leading or trailing run of # keeps that many original characters visible
+        Assert.Equal("ToStringMaskPatternData { Password = ***, Secret = [REDACTED], Token = ***34, Card = 4111****1111 }", maskedText);
+        // A value not longer than the kept length is written as the mask text only
+        Assert.Equal("ToStringMaskPatternData { Password = ***, Secret = [REDACTED], Token = ***, Card = **** }", shortText);
+        // null is not masked and follows the null setting
+        Assert.Equal("ToStringMaskPatternData { Password = null, Secret = null, Token = null, Card = null }", nullText);
+    }
+
+    [Fact]
+    public void TestMaskChar()
+    {
+        // Arrange
+        var masked = new ToStringMaskCharData { Password = "secret", Secret = "abc", Both = "secret" };
+        var nullValue = new ToStringMaskCharData();
+
+        // Act
+        var maskedText = masked.ToString();
+        var nullText = nullValue.ToString();
+
+        // Assert
+        // MaskChar repeats the character over the whole value, and MaskPattern wins when both are set
+        Assert.Equal("ToStringMaskCharData { Password = ******, Secret = ..., Both = *** }", maskedText);
+        Assert.Equal("ToStringMaskCharData { Password = null, Secret = null, Both = null }", nullText);
+    }
+
+    [Fact]
+    public void TestMaskWithMaxLength()
+    {
+        // Arrange
+        var longValue = new ToStringMaskWithMaxLengthData
+        {
+            Password = "secretvalue",
+            Secret = "topsecret",
+            Card = "4111111111111111",
+            Account = "4111111111111111",
+            Number = 7
+        };
+        var shortValue = new ToStringMaskWithMaxLengthData
+        {
+            Password = "ab",
+            Secret = "y",
+            Card = "41111111",
+            Account = "41111111"
+        };
+
+        // Act
+        var longText = longValue.ToString();
+        var shortText = shortValue.ToString();
+
+        // Assert
+        // MaxLength truncates the masked result: ********** -> ****, [REDACTED] -> [RED,
+        // 4111****1111 -> 4111****, 4111****1111 -> 41, 000007 -> ****** -> ****
+        Assert.Equal("ToStringMaskWithMaxLengthData { Password = ****, Secret = [RED, Card = 4111****, Account = 41, Number = **** }", longText);
+        // A value not longer than the kept length is masked over its whole length, then truncated
+        Assert.Equal("ToStringMaskWithMaxLengthData { Password = **, Secret = [RED, Card = ****, Account = **, Number = **** }", shortText);
+    }
+
+    [Fact]
+    public void TestMaskWithFormat()
+    {
+        // Arrange
+        var data = new ToStringMaskedValueTypeData { Number = 7 };
+
+        // Act
+        var text = data.ToString();
+
+        // Assert
+        // The format is applied before masking: 7 -> "000007" -> "00****"
+        Assert.Equal("ToStringMaskedValueTypeData { Number = 00**** }", text);
     }
 
     [Fact]
@@ -404,7 +528,7 @@ public class ToStringTest
         var text = data.ToString();
 
         // Assert
-        Assert.Equal("ToStringFormatData { Code = 007, Hex = 00FF }", text); // The ValueFormat format is applied
+        Assert.Equal("ToStringFormatData { Code = 007, Hex = 00FF }", text); // The ToStringFormat format is applied
     }
 
     [Fact]

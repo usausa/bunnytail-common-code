@@ -110,16 +110,16 @@ When there is no member to write, the two inner spaces are collapsed into one, s
 
 Angle brackets need to be XML escaped in a csproj, for example `<CommonCodeGeneratorToStringOpenBracket>&lt;&lt;</CommonCodeGeneratorToStringOpenBracket>`.
 
-### Property attributes
+### Member attributes
 
-| Attribute | Description |
-|---|---|
-| `[IgnoreToString]` | Exclude the member from output |
-| `[ToStringFormat(format)]` | Apply a format string (`AppendFormatted(value, format)`) |
-| `[ToStringMaxLength(length)]` | Truncate the stringified value to the given length |
-| `[ToStringMask]` / `[ToStringMask(Show = n)]` | Mask the value; with `Show`, reveal only the last `n` characters |
+`[IgnoreToString]` excludes a member from the output. `[ToStringFormat]` controls how the value of a single member is written, and both can be applied to properties and fields.
 
-When combined, the priority is `Mask` > collection expansion > `MaxLength` > `Format` (`MaxLength` and `Format` can be combined). `[ToStringMask]` also wins over `Collection = Expand`, so the elements of a masked collection are never written. These attributes can be applied to both properties and fields, and `null` values follow the `Null` setting.
+| Property | Type | Description |
+|---|---|---|
+| `Format` | `string` | Format string applied to the value, given as the positional argument |
+| `MaxLength` | `int` | Truncate the formatted value to the given length, `0` = unlimited |
+| `MaskChar` | `char` | Character repeated over the whole value |
+| `MaskPattern` | `string` | Text written instead of the value, see below |
 
 ```csharp
 [GenerateToString]
@@ -127,19 +127,65 @@ public partial class User
 {
     public int Id { get; set; }
 
-    [ToStringMask]
-    public string Password { get; set; } = default!;     // Password = ***
+    [IgnoreToString]
+    public int Revision { get; set; }                     // not written
 
-    [ToStringMask(Show = 2)]
-    public string Token { get; set; } = default!;        // Token = ***34
+    [ToStringFormat(MaskChar = '*')]
+    public string Password { get; set; } = default!;      // Password = ****** (same length)
+
+    [ToStringFormat(MaskPattern = "***")]
+    public string Answer { get; set; } = default!;        // Answer = ***
+
+    [ToStringFormat(MaskPattern = "[REDACTED]")]
+    public string Secret { get; set; } = default!;        // Secret = [REDACTED]
+
+    [ToStringFormat(MaskPattern = "***##")]
+    public string Token { get; set; } = default!;         // Token = ***34
+
+    [ToStringFormat(MaskPattern = "####****####")]
+    public string Card { get; set; } = default!;          // Card = 4111****1111
 
     [ToStringFormat("yyyy-MM-dd")]
-    public DateTime BirthDate { get; set; }              // BirthDate = 2020-01-02
+    public DateTime BirthDate { get; set; }               // BirthDate = 2020-01-02
 
-    [ToStringMaxLength(20)]
-    public string Description { get; set; } = default!;  // truncated to 20 chars
+    [ToStringFormat(MaxLength = 20)]
+    public string Description { get; set; } = default!;   // truncated to 20 chars
+
+    [ToStringFormat("000000", MaxLength = 3)]
+    public int Number { get; set; }                       // 7 -> "000007" -> "000"
 }
 ```
+
+#### Masking
+
+`MaskChar` is the simple form: the whole value becomes that character repeated over its length. `MaskPattern` is the pattern form: a leading or trailing run of `#` keeps that many characters of the original value visible, and the part between the two runs is written as is. The pattern is parsed at generation time, so there is no runtime cost.
+
+| Setting | Value | Output |
+|---|---|---|
+| `MaskChar = '*'` | `secret` | `******` |
+| `MaskChar = '.'` | `abc` | `...` |
+| `MaskPattern = "***"` | `secret` | `***` |
+| `MaskPattern = "[REDACTED]"` | `secret` | `[REDACTED]` |
+| `MaskPattern = "***##"` | `abcd1234` | `***34` |
+| `MaskPattern = "####****####"` | `4111111111111111` | `4111****1111` |
+
+`MaskChar` preserves the length of the value while `MaskPattern` does not, so use `MaskPattern` when the length itself must not leak. `MaskPattern` wins when both are set.
+
+A value not longer than the total kept length is written as the mask text only, so a short value never leaks an original character. A `MaskPattern` without `#` does not stringify the value at all and only the null check remains.
+
+#### Combining the settings
+
+`Format`, masking and `MaxLength` form a pipeline in that order, so any combination of them works.
+
+| Setting | Value | Format | Mask | MaxLength |
+|---|---|---|---|---|
+| `[ToStringFormat("000000", MaskChar = '*', MaxLength = 4)]` | `7` | `000007` | `******` | `****` |
+| `[ToStringFormat(MaskPattern = "####****####", MaxLength = 8)]` | `4111111111111111` | — | `4111****1111` | `4111****` |
+| `[ToStringFormat("000000", MaxLength = 3)]` | `7` | `000007` | — | `000` |
+
+The masked length is known at generation time, so the truncation costs nothing at runtime.
+
+Collection expansion is an alternative rendering rather than a stage of this pipeline: masking overrides it, so the elements of a masked collection are never written, and `CollectionLimit` plays the role of `MaxLength` inside an expanded collection. A `null` value follows the `Null` setting and is neither masked nor truncated.
 
 ### Diagnostics
 

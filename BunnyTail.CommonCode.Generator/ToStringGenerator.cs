@@ -18,14 +18,15 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 {
     private const string GenerateAttributeName = "BunnyTail.CommonCode.GenerateToStringAttribute";
     private const string IgnoreAttributeName = "BunnyTail.CommonCode.IgnoreToStringAttribute";
-    private const string ValueFormatAttributeName = "BunnyTail.CommonCode.ValueFormatAttribute";
+    private const string FormatAttributeName = "BunnyTail.CommonCode.ToStringFormatAttribute";
 
     private const string GenericEnumerableName = "System.Collections.Generic.IEnumerable<T>";
 
     private const string OptionPrefix = "CommonCodeGeneratorToString";
 
-    private const string MaskLiteral = "***";
     private const string EllipsisLiteral = "...";
+
+    private const char MaskKeepChar = '#';
 
     private const string TypeNameCacheField = "GeneratedToStringPrefix";
     private const string TypeNameFormatMethod = "GeneratedToStringFormatTypeName";
@@ -353,45 +354,39 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         var (hasElements, isNullAssignable, isElementNullAssignable) = GetMemberType(type);
 
         string? format = null;
+        string? maskPattern = null;
+        var maskChar = '\0';
         var maxLength = 0;
-        var mask = false;
-        var maskShow = 0;
 
         var attr = symbol.GetAttributes()
-            .FirstOrDefault(static x => x.AttributeClass?.ToDisplayString() == ValueFormatAttributeName);
+            .FirstOrDefault(static x => x.AttributeClass?.ToDisplayString() == FormatAttributeName);
         if (attr is not null)
         {
-            if ((attr.ConstructorArguments.Length > 0) && (attr.ConstructorArguments[0].Value is string formatArgument))
+            if ((attr.ConstructorArguments.Length > 0) && (attr.ConstructorArguments[0].Value is string formatValue))
             {
-                format = formatArgument;
+                format = formatValue;
             }
 
             foreach (var argument in attr.NamedArguments)
             {
                 switch (argument.Key)
                 {
-                    case "Format":
-                        if (argument.Value.Value is string formatValue)
-                        {
-                            format = formatValue;
-                        }
-                        break;
                     case "MaxLength":
                         if (argument.Value.Value is int maxLengthValue)
                         {
                             maxLength = maxLengthValue;
                         }
                         break;
-                    case "Mask":
-                        if (argument.Value.Value is bool maskValue)
+                    case "MaskChar":
+                        if (argument.Value.Value is char maskCharValue)
                         {
-                            mask = maskValue;
+                            maskChar = maskCharValue;
                         }
                         break;
-                    case "MaskShow":
-                        if (argument.Value.Value is int maskShowValue)
+                    case "MaskPattern":
+                        if (argument.Value.Value is string maskPatternValue)
                         {
-                            maskShow = maskShowValue;
+                            maskPattern = maskPatternValue;
                         }
                         break;
                 }
@@ -406,8 +401,8 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             isElementNullAssignable,
             format,
             maxLength,
-            mask,
-            maskShow);
+            maskChar,
+            maskPattern);
     }
 
     private static (bool HasElements, bool IsNullAssignable, bool IsElementNullAssignable) GetMemberType(ITypeSymbol typeSymbol)
@@ -719,9 +714,13 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     {
         // マスク指定はコレクション展開より優先する。展開すると要素の値がそのまま出力されてしまうため。
         // Mask takes precedence over collection expansion, otherwise the element values would be written as is.
-        if (member.Mask)
+        if (!String.IsNullOrEmpty(member.MaskPattern))
         {
-            BuildAppendMasked(builder, settings, member);
+            BuildAppendMaskPattern(builder, settings, member);
+        }
+        else if (member.MaskChar != '\0')
+        {
+            BuildAppendMaskChar(builder, settings, member);
         }
         else if (member.HasElements && (settings.Collection == CollectionOption.Expand))
         {
@@ -729,7 +728,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         }
         else if (member.MaxLength > 0)
         {
-            BuildAppendMasked(builder, settings, member);
+            BuildAppendMaxLength(builder, settings, member);
         }
         else if (member.IsNullAssignable && (settings.Null == NullOption.Literal))
         {
@@ -906,12 +905,191 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             .NewLine();
     }
 
-    private static void BuildAppendMasked(SourceBuilder builder, SettingsModel settings, MemberModel member)
+    // Mask の先頭 / 末尾に並ぶ '#' は元の値を残す文字数を表し、その間の文字列がマスク文字列になる。
+    // A leading / trailing run of '#' in Mask is the number of original characters kept, and the part between them is the mask text.
+    private static (int Head, string Text, int Tail) ParseMask(string mask)
+    {
+        var head = 0;
+        while ((head < mask.Length) && (mask[head] == MaskKeepChar))
+        {
+            head++;
+        }
+
+        var tail = 0;
+        while ((tail < (mask.Length - head)) && (mask[mask.Length - tail - 1] == MaskKeepChar))
+        {
+            tail++;
+        }
+
+        return (head, mask.Substring(head, mask.Length - head - tail), tail);
+    }
+
+    // 値全体を 1 文字で埋めるため、元の文字数だけが必要になる。MaxLength は埋める文字数の上限になる。
+    // The whole value is filled with a single character, so only the original length is needed. MaxLength caps the filled length.
+    private static void BuildAppendMaskChar(SourceBuilder builder, SettingsModel settings, MemberModel member)
     {
         builder.BeginScope();
 
+        BuildValueLocal(builder, member);
+        BuildNullBranch(builder, settings);
+
+        builder
+            .Indent()
+            .Append("handler.AppendFormatted(new string('")
+            .Append(EscapeChar(member.MaskChar))
+            .Append("', ");
+        if (member.MaxLength > 0)
+        {
+            builder
+                .Append("global::System.Math.Min(value.Length, ")
+                .Append(member.MaxLength.ToString(CultureInfo.InvariantCulture))
+                .Append(")");
+        }
+        else
+        {
+            builder.Append("value.Length");
+        }
+        builder
+            .Append("));")
+            .NewLine();
+
+        builder.EndScope();
+
+        builder.EndScope();
+    }
+
+    private static void BuildAppendMaskPattern(SourceBuilder builder, SettingsModel settings, MemberModel member)
+    {
+        var (head, text, tail) = ParseMask(member.MaskPattern!);
+        var keep = head + tail;
+
+        // マスク適用後に MaxLength を適用する。マスク後の出力長はコンパイル時に確定するため、生成時に切り詰める。
+        // MaxLength is applied after masking. The masked length is known at compile time, so it is truncated during generation.
+        var headTake = head;
+        var maskText = text;
+        var tailTake = tail;
+        var shortText = text;
+        if (member.MaxLength > 0)
+        {
+            headTake = Math.Min(head, member.MaxLength);
+            maskText = Truncate(text, member.MaxLength - headTake);
+            tailTake = Math.Min(tail, member.MaxLength - headTake - maskText.Length);
+            shortText = Truncate(text, member.MaxLength);
+        }
+
+        // 元の文字を残さない場合は値を文字列化する必要が無く、null 判定だけで済む
+        // When no original character is kept, the value does not need to be stringified and only the null check is required
+        if (keep == 0)
+        {
+            if (!member.IsNullAssignable)
+            {
+                BuildAppendLiteral(builder, shortText);
+                return;
+            }
+
+            builder.Indent().Append("if (this.").Append(member.Name).Append(" is not null)").NewLine();
+            builder.BeginScope();
+            BuildAppendLiteral(builder, shortText);
+            builder.EndScope();
+
+            if (settings.Null == NullOption.Literal)
+            {
+                builder.Indent().Append("else").NewLine();
+                builder.BeginScope();
+                BuildAppendLiteral(builder, settings.NullLiteral);
+                builder.EndScope();
+            }
+
+            return;
+        }
+
+        builder.BeginScope();
+
+        BuildValueLocal(builder, member);
+        BuildNullBranch(builder, settings);
+
+        // 残す文字数に満たない値は元の文字が漏れないようマスク文字列だけを出力する
+        // A value not longer than the kept length is written as the mask text only, so that no original character leaks
+        builder
+            .Indent()
+            .Append("if (value.Length > ")
+            .Append(keep.ToString(CultureInfo.InvariantCulture))
+            .Append(")")
+            .NewLine();
+        builder.BeginScope();
+        if (headTake > 0)
+        {
+            builder
+                .Indent()
+                .Append("handler.AppendFormatted(value.Substring(0, ")
+                .Append(headTake.ToString(CultureInfo.InvariantCulture))
+                .Append("));")
+                .NewLine();
+        }
+        BuildAppendLiteral(builder, maskText);
+        if (tailTake > 0)
+        {
+            builder
+                .Indent()
+                .Append("handler.AppendFormatted(value.Substring(value.Length - ")
+                .Append(tail.ToString(CultureInfo.InvariantCulture));
+            if (tailTake != tail)
+            {
+                builder.Append(", ").Append(tailTake.ToString(CultureInfo.InvariantCulture));
+            }
+            builder
+                .Append("));")
+                .NewLine();
+        }
+        builder.EndScope();
+        builder.Indent().Append("else").NewLine();
+        builder.BeginScope();
+        BuildAppendLiteral(builder, shortText);
+        builder.EndScope();
+
+        builder.EndScope();
+
+        builder.EndScope();
+    }
+
+    private static string Truncate(string value, int length) =>
+        value.Length > length ? value.Substring(0, length) : value;
+
+    private static void BuildAppendMaxLength(SourceBuilder builder, SettingsModel settings, MemberModel member)
+    {
+        builder.BeginScope();
+
+        BuildValueLocal(builder, member);
+        BuildNullBranch(builder, settings);
+
+        builder
+            .Indent()
+            .Append("if (value.Length > ")
+            .Append(member.MaxLength.ToString(CultureInfo.InvariantCulture))
+            .Append(")")
+            .NewLine();
+        builder.BeginScope();
+        builder
+            .Indent()
+            .Append("handler.AppendFormatted(value.Substring(0, ")
+            .Append(member.MaxLength.ToString(CultureInfo.InvariantCulture))
+            .Append("));")
+            .NewLine();
+        builder.EndScope();
+        builder.Indent().Append("else").NewLine();
+        builder.BeginScope();
+        builder.Indent().Append("handler.AppendFormatted(value);").NewLine();
+        builder.EndScope();
+
+        builder.EndScope();
+
+        builder.EndScope();
+    }
+
+    private static void BuildValueLocal(SourceBuilder builder, MemberModel member)
+    {
         builder.Indent().Append("var value = ");
-        if (!member.Mask && !String.IsNullOrEmpty(member.Format))
+        if (!String.IsNullOrEmpty(member.Format))
         {
             builder
                 .Append("this.")
@@ -931,7 +1109,10 @@ public sealed class ToStringGenerator : IIncrementalGenerator
                 .Append(member.IsNullAssignable ? "?.ToString();" : ".ToString();")
                 .NewLine();
         }
+    }
 
+    private static void BuildNullBranch(SourceBuilder builder, SettingsModel settings)
+    {
         builder.Indent().Append("if (value is null)").NewLine();
         builder.BeginScope();
         if (settings.Null == NullOption.Literal)
@@ -941,61 +1122,6 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         builder.EndScope();
         builder.Indent().Append("else").NewLine();
         builder.BeginScope();
-
-        if (member.Mask)
-        {
-            if (member.MaskShow > 0)
-            {
-                builder
-                    .Indent()
-                    .Append("if (value.Length > ")
-                    .Append(member.MaskShow.ToString(CultureInfo.InvariantCulture))
-                    .Append(")")
-                    .NewLine();
-                builder.BeginScope();
-                BuildAppendLiteral(builder, MaskLiteral);
-                builder
-                    .Indent()
-                    .Append("handler.AppendFormatted(value.Substring(value.Length - ")
-                    .Append(member.MaskShow.ToString(CultureInfo.InvariantCulture))
-                    .Append("));")
-                    .NewLine();
-                builder.EndScope();
-                builder.Indent().Append("else").NewLine();
-                builder.BeginScope();
-                BuildAppendLiteral(builder, MaskLiteral);
-                builder.EndScope();
-            }
-            else
-            {
-                BuildAppendLiteral(builder, MaskLiteral);
-            }
-        }
-        else
-        {
-            builder
-                .Indent()
-                .Append("if (value.Length > ")
-                .Append(member.MaxLength.ToString(CultureInfo.InvariantCulture))
-                .Append(")")
-                .NewLine();
-            builder.BeginScope();
-            builder
-                .Indent()
-                .Append("handler.AppendFormatted(value.Substring(0, ")
-                .Append(member.MaxLength.ToString(CultureInfo.InvariantCulture))
-                .Append("));")
-                .NewLine();
-            builder.EndScope();
-            builder.Indent().Append("else").NewLine();
-            builder.BeginScope();
-            builder.Indent().Append("handler.AppendFormatted(value);").NewLine();
-            builder.EndScope();
-        }
-
-        builder.EndScope();
-
-        builder.EndScope();
     }
 
     private static void FlushLiteral(SourceBuilder builder, StringBuilder pending)
@@ -1030,6 +1156,14 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 
     private static string EscapeString(string value) =>
         value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
+    private static string EscapeChar(char value) =>
+        value switch
+        {
+            '\\' => "\\\\",
+            '\'' => "\\'",
+            _ => value.ToString()
+        };
 
     private static string MakeFullName(INamedTypeSymbol symbol, string ns)
     {
@@ -1215,6 +1349,6 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         bool IsElementNullAssignable,
         string? Format,
         int MaxLength,
-        bool Mask,
-        int MaskShow);
+        char MaskChar,
+        string? MaskPattern);
 }
