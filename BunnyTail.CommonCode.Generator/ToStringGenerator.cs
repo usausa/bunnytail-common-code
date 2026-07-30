@@ -60,7 +60,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var optionProvider = context.AnalyzerConfigOptionsProvider
-            .Select(static (provider, _) => GetOptions(provider));
+            .Select(static (provider, _) => ResolveSettings(GetOptions(provider)));
 
         var targetProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
@@ -116,7 +116,14 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     }
 
     private static string? GetStringOption(AnalyzerConfigOptions options, string name) =>
-        options.GetValue<string?>(OptionPrefix + name);
+        Unquote(options.GetValue<string?>(OptionPrefix + name));
+
+    // MSBuild はプロパティ値の前後の空白を除去するため、引用符で囲むことで空白を含む値を指定できるようにする。
+    // MSBuild trims the surrounding whitespace of a property value, so quoting allows a value that contains it.
+    private static string? Unquote(string? value) =>
+        (value is not null) && (value.Length >= 2) && (value[0] == '"') && (value[value.Length - 1] == '"')
+            ? value.Substring(1, value.Length - 2)
+            : value;
 
     private static T GetEnumOption<T>(AnalyzerConfigOptions options, string name)
         where T : struct, Enum
@@ -131,69 +138,15 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         return !String.IsNullOrEmpty(value) && Int32.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result) ? result : 0;
     }
 
-    private static OptionModel GetAttributeOptions(AttributeData attr) =>
-        new(
-            GetEnumArgument<StyleOption>(attr, "Style"),
-            GetEnumArgument<TypeNameOption>(attr, "TypeName"),
-            GetEnumArgument<TypeArgumentOption>(attr, "TypeArgument"),
-            GetEnumArgument<NullOption>(attr, "Null"),
-            GetStringArgument(attr, "NullLiteral"),
-            GetEnumArgument<CollectionOption>(attr, "Collection"),
-            GetIntArgument(attr, "CollectionLimit"),
-            GetEnumArgument<MemberKindOption>(attr, "Members"),
-            GetEnumArgument<BracketOption>(attr, "Bracket"),
-            GetStringArgument(attr, "OpenBracket"),
-            GetStringArgument(attr, "CloseBracket"),
-            GetEnumArgument<SpaceOption>(attr, "InnerSpace"),
-            GetEnumArgument<SpaceOption>(attr, "TypeNameSpace"),
-            GetStringArgument(attr, "Separator"),
-            GetStringArgument(attr, "Assign"),
-            GetEnumArgument<BracketOption>(attr, "CollectionBracket"),
-            GetStringArgument(attr, "CollectionOpenBracket"),
-            GetStringArgument(attr, "CollectionCloseBracket"),
-            GetEnumArgument<SpaceOption>(attr, "CollectionInnerSpace"),
-            GetStringArgument(attr, "CollectionSeparator"));
-
-    private static T GetEnumArgument<T>(AttributeData attr, string name)
-        where T : struct, Enum
-    {
-        var arg = attr.NamedArguments.FirstOrDefault(x => x.Key == name);
-        return arg.Value.Value is int value ? (T)Enum.ToObject(typeof(T), value) : default;
-    }
-
-    private static string? GetStringArgument(AttributeData attr, string name)
-    {
-        var arg = attr.NamedArguments.FirstOrDefault(x => x.Key == name);
-        return arg.Value.Value as string;
-    }
-
-    private static int GetIntArgument(AttributeData attr, string name)
-    {
-        var arg = attr.NamedArguments.FirstOrDefault(x => x.Key == name);
-        return arg.Value.Value is int value ? value : 0;
-    }
-
     // ------------------------------------------------------------
     // Settings
     // ------------------------------------------------------------
 
-    private static SettingsModel ResolveSettings(OptionModel global, OptionModel local)
+    private static SettingsModel ResolveSettings(OptionModel options)
     {
-        var style = local.Style != StyleOption.Inherit
-            ? local.Style
-            : global.Style != StyleOption.Inherit
-                ? global.Style
-                : StyleOption.Default;
+        var style = options.Style != StyleOption.Inherit ? options.Style : StyleOption.Default;
 
-        var resolved = GetPreset(style);
-
-        // 型側で Style を指定した場合はプリセットへのリセットとして扱い、プロジェクト全体の個別指定は適用しない。
-        // When the type specifies Style, it is treated as a reset to the preset and project wide individual settings are not applied.
-        if (local.Style == StyleOption.Inherit)
-        {
-            resolved = Merge(resolved, global);
-        }
-        resolved = Merge(resolved, local);
+        var resolved = Merge(GetPreset(style), options);
 
         var openBracket = ResolveBracket(resolved.Bracket, resolved.OpenBracket, true);
         var closeBracket = ResolveBracket(resolved.Bracket, resolved.CloseBracket, false);
@@ -340,9 +293,6 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         }
         containingTypes?.Reverse();
 
-        var attr = symbol.GetAttributes()
-            .First(static x => x.AttributeClass?.ToDisplayString() == GenerateAttributeName);
-
         return Results.Success(new TypeModel(
             ns,
             new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
@@ -351,7 +301,6 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             MakeFullName(symbol, ns),
             new EquatableArray<string>(symbol.TypeParameters.Select(static x => x.Name).ToArray()),
             symbol.IsValueType,
-            GetAttributeOptions(attr),
             new EquatableArray<MemberModel>(CollectMembers(symbol).ToArray())));
     }
 
@@ -536,11 +485,9 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         }
     }
 
-    private static void Execute(SourceProductionContext context, OptionModel options, TypeModel type)
+    private static void Execute(SourceProductionContext context, SettingsModel settings, TypeModel type)
     {
         context.CancellationToken.ThrowIfCancellationRequested();
-
-        var settings = ResolveSettings(options, type.Options);
 
         var builder = new SourceBuilder();
         BuildSource(builder, settings, type);
@@ -1287,7 +1234,6 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         string FullName,
         EquatableArray<string> TypeParameters,
         bool IsValueType,
-        OptionModel Options,
         EquatableArray<MemberModel> Members);
 
     private sealed record MemberModel(

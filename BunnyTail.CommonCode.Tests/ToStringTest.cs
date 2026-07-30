@@ -1,9 +1,5 @@
 namespace BunnyTail.CommonCode;
 
-// ------------------------------------------------------------
-// Default style
-// ------------------------------------------------------------
-
 #pragma warning disable CA1819
 // ReSharper disable once PartialTypeWithSinglePart
 [GenerateToString]
@@ -46,13 +42,6 @@ public partial class ToStringGenericPairData<TKey, TValue>
 [GenerateToString]
 public partial class ToStringEmptyGenericData<T>;
 
-// ReSharper disable once PartialTypeWithSinglePart
-[GenerateToString(TypeArgument = ToStringTypeArgument.None)]
-public partial class ToStringNoTypeArgumentData<T>
-{
-    public T Value { get; set; } = default!;
-}
-
 public static partial class ToStringOuterData
 {
     [GenerateToString]
@@ -61,12 +50,6 @@ public static partial class ToStringOuterData
         public int Id { get; set; }
 
         public string Name { get; set; } = default!;
-    }
-
-    [GenerateToString(TypeName = ToStringTypeName.Full)]
-    public partial class FullNameData
-    {
-        public int Id { get; set; }
     }
 }
 
@@ -119,7 +102,7 @@ public class ToStringInheritanceBase
     public int BaseSecond { get; init; }
 }
 
-// Base type members are output first, same as record
+// Base type members are output first
 [GenerateToString]
 public partial class ToStringInheritanceDerived : ToStringInheritanceBase
 {
@@ -139,23 +122,13 @@ public partial class ToStringStaticData
 
 #pragma warning disable CA1051
 #pragma warning disable SA1401
+// Fields are excluded unless CommonCodeGeneratorToStringMembers is PropertyAndField
 [GenerateToString]
-public partial class ToStringPropertyOnlyData
-{
-    public int Id { get; set; }
-
-    public int Extra;
-}
-
-[GenerateToString(Members = ToStringMemberKind.PropertyAndField)]
 public partial class ToStringFieldData
 {
     public int Id { get; set; }
 
     public int Extra;
-
-    [IgnoreToString]
-    public int Ignore;
 }
 #pragma warning restore SA1401
 #pragma warning restore CA1051
@@ -169,124 +142,6 @@ public partial struct ToStringStructData
     public int Y { get; set; }
 }
 #pragma warning restore CA1815
-
-// ------------------------------------------------------------
-// Record style
-// ------------------------------------------------------------
-
-public record ToStringRecordEquivalent
-{
-    public int Id { get; init; }
-
-    public string? Name { get; init; }
-
-    public int? Number { get; init; }
-}
-
-// ReSharper disable once PartialTypeWithSinglePart
-[GenerateToString(Style = ToStringStyle.Record)]
-public partial class ToStringRecordCompatData
-{
-    public int Id { get; init; }
-
-    public string? Name { get; init; }
-
-    public int? Number { get; init; }
-}
-
-#pragma warning disable CA1819
-[GenerateToString(Style = ToStringStyle.Record)]
-public partial class ToStringRecordStyleData
-{
-    public string? Name { get; set; }
-
-    public int[]? Values { get; set; }
-}
-#pragma warning restore CA1819
-
-// ------------------------------------------------------------
-// Null
-// ------------------------------------------------------------
-
-[GenerateToString(NullLiteral = "<null>")]
-public partial class ToStringNullLiteralData
-{
-    public string? Name { get; set; }
-}
-
-[GenerateToString(Null = ToStringNullMode.Empty)]
-public partial class ToStringNullEmptyData
-{
-    public string? Name { get; set; }
-}
-
-// ------------------------------------------------------------
-// Bracket and separator
-// ------------------------------------------------------------
-
-[GenerateToString(Bracket = ToStringBracket.Parenthesis, InnerSpace = ToStringSpace.None, TypeNameSpace = ToStringSpace.None)]
-public partial class ToStringParenData
-{
-    public int Id { get; set; }
-
-    public string Name { get; set; } = default!;
-}
-
-[GenerateToString(Bracket = ToStringBracket.Square, InnerSpace = ToStringSpace.None)]
-public partial class ToStringSquareData
-{
-    public int Id { get; set; }
-}
-
-[GenerateToString(Bracket = ToStringBracket.Parenthesis)]
-public partial class ToStringEmptyParenData;
-
-[GenerateToString(TypeName = ToStringTypeName.None)]
-public partial class ToStringNoTypeNameData
-{
-    public int Id { get; set; }
-}
-
-[GenerateToString(TypeName = ToStringTypeName.None, Bracket = ToStringBracket.None)]
-public partial class ToStringNoBracketData
-{
-    public int Id { get; set; }
-
-    public string Name { get; set; } = default!;
-}
-
-[GenerateToString(OpenBracket = "<<", CloseBracket = ">>", Separator = " | ", Assign = ":")]
-public partial class ToStringCustomBracketData
-{
-    public int Id { get; set; }
-
-    public string Name { get; set; } = default!;
-}
-
-// ------------------------------------------------------------
-// Collection
-// ------------------------------------------------------------
-
-#pragma warning disable CA1819
-[GenerateToString(CollectionLimit = 3)]
-public partial class ToStringCollectionLimitData
-{
-    public int[]? Values { get; set; }
-}
-
-[GenerateToString(
-    CollectionBracket = ToStringBracket.Parenthesis,
-    CollectionInnerSpace = ToStringSpace.Space,
-    CollectionSeparator = " / ")]
-public partial class ToStringCollectionStyleData
-{
-    public int[]? Values { get; set; }
-}
-#pragma warning restore CA1819
-
-// ------------------------------------------------------------
-// Member attribute
-// ------------------------------------------------------------
 
 [GenerateToString]
 public partial class ToStringMaskData
@@ -338,10 +193,6 @@ public partial class ToStringFormatMaxLengthData
 
 public class ToStringTest
 {
-    // ------------------------------------------------------------
-    // Default style
-    // ------------------------------------------------------------
-
     [Fact]
     public void TestBasic()
     {
@@ -400,19 +251,6 @@ public class ToStringTest
     }
 
     [Fact]
-    public void TestNoTypeArgument()
-    {
-        // Arrange
-        var data = new ToStringNoTypeArgumentData<int> { Value = 1 };
-
-        // Act
-        var text = data.ToString();
-
-        // Assert
-        Assert.Equal("ToStringNoTypeArgumentData { Value = 1 }", text);
-    }
-
-    [Fact]
     public void TestInnerClass()
     {
         // Arrange
@@ -423,19 +261,6 @@ public class ToStringTest
 
         // Assert
         Assert.Equal("InnerData { Id = 456, Name = inner }", text); // Only the innermost name is output
-    }
-
-    [Fact]
-    public void TestFullTypeName()
-    {
-        // Arrange
-        var data = new ToStringOuterData.FullNameData { Id = 1 };
-
-        // Act
-        var text = data.ToString();
-
-        // Assert
-        Assert.Equal("BunnyTail.CommonCode.ToStringOuterData.FullNameData { Id = 1 }", text);
     }
 
     [Fact]
@@ -512,29 +337,16 @@ public class ToStringTest
     }
 
     [Fact]
-    public void TestPropertyOnly()
+    public void TestFieldExcluded()
     {
         // Arrange
-        var data = new ToStringPropertyOnlyData { Id = 1, Extra = 2 };
+        var data = new ToStringFieldData { Id = 1, Extra = 2 };
 
         // Act
         var text = data.ToString();
 
         // Assert
-        Assert.Equal("ToStringPropertyOnlyData { Id = 1 }", text); // Fields are excluded by default
-    }
-
-    [Fact]
-    public void TestField()
-    {
-        // Arrange
-        var data = new ToStringFieldData { Id = 1, Extra = 2, Ignore = 3 };
-
-        // Act
-        var text = data.ToString();
-
-        // Assert
-        Assert.Equal("ToStringFieldData { Id = 1, Extra = 2 }", text); // Fields are included by Members
+        Assert.Equal("ToStringFieldData { Id = 1 }", text); // Fields are excluded by default
     }
 
     [Fact]
@@ -549,204 +361,6 @@ public class ToStringTest
         // Assert
         Assert.Equal("ToStringStructData { X = 1, Y = 2 }", text);
     }
-
-    // ------------------------------------------------------------
-    // Record style
-    // ------------------------------------------------------------
-
-    [Fact]
-    public void TestRecordCompatible()
-    {
-        // Arrange
-        var withValues = new ToStringRecordEquivalent { Id = 1, Name = "xyz", Number = 5 };
-        var withNulls = new ToStringRecordEquivalent { Id = 1 };
-        var generatedWithValues = new ToStringRecordCompatData { Id = 1, Name = "xyz", Number = 5 };
-        var generatedWithNulls = new ToStringRecordCompatData { Id = 1 };
-
-        // Act
-        var expectedWithValues = ToCompatText(withValues.ToString());
-        var expectedWithNulls = ToCompatText(withNulls.ToString());
-
-        // Assert
-        // The output of the record style is identical to the record output
-        Assert.Equal(expectedWithValues, generatedWithValues.ToString());
-        Assert.Equal(expectedWithNulls, generatedWithNulls.ToString());
-
-        static string ToCompatText(string text) =>
-            text.Replace(nameof(ToStringRecordEquivalent), nameof(ToStringRecordCompatData), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void TestRecordStyle()
-    {
-        // Arrange
-        var withValues = new ToStringRecordStyleData { Name = "xyz", Values = [1, 2] };
-        var withNulls = new ToStringRecordStyleData();
-
-        // Act
-        var withValuesText = withValues.ToString();
-        var withNullsText = withNulls.ToString();
-
-        // Assert
-        // The collection is not expanded and null becomes an empty string
-        Assert.Equal("ToStringRecordStyleData { Name = xyz, Values = System.Int32[] }", withValuesText);
-        Assert.Equal("ToStringRecordStyleData { Name = , Values =  }", withNullsText);
-    }
-
-    // ------------------------------------------------------------
-    // Null
-    // ------------------------------------------------------------
-
-    [Fact]
-    public void TestNullLiteral()
-    {
-        // Arrange
-        var data = new ToStringNullLiteralData();
-
-        // Act
-        var text = data.ToString();
-
-        // Assert
-        Assert.Equal("ToStringNullLiteralData { Name = <null> }", text);
-    }
-
-    [Fact]
-    public void TestNullEmpty()
-    {
-        // Arrange
-        var data = new ToStringNullEmptyData();
-
-        // Act
-        var text = data.ToString();
-
-        // Assert
-        Assert.Equal("ToStringNullEmptyData { Name =  }", text);
-    }
-
-    // ------------------------------------------------------------
-    // Bracket and separator
-    // ------------------------------------------------------------
-
-    [Fact]
-    public void TestParenthesisBracket()
-    {
-        // Arrange
-        var data = new ToStringParenData { Id = 1, Name = "x" };
-
-        // Act
-        var text = data.ToString();
-
-        // Assert
-        Assert.Equal("ToStringParenData(Id = 1, Name = x)", text);
-    }
-
-    [Fact]
-    public void TestSquareBracket()
-    {
-        // Arrange
-        var data = new ToStringSquareData { Id = 1 };
-
-        // Act
-        var text = data.ToString();
-
-        // Assert
-        Assert.Equal("ToStringSquareData [Id = 1]", text);
-    }
-
-    [Fact]
-    public void TestEmptyWithBracket()
-    {
-        // Arrange
-        var data = new ToStringEmptyParenData();
-
-        // Act
-        var text = data.ToString();
-
-        // Assert
-        Assert.Equal("ToStringEmptyParenData ( )", text);
-    }
-
-    [Fact]
-    public void TestNoTypeName()
-    {
-        // Arrange
-        var data = new ToStringNoTypeNameData { Id = 1 };
-
-        // Act
-        var text = data.ToString();
-
-        // Assert
-        Assert.Equal("{ Id = 1 }", text); // The space before the bracket is also suppressed
-    }
-
-    [Fact]
-    public void TestNoBracket()
-    {
-        // Arrange
-        var data = new ToStringNoBracketData { Id = 1, Name = "x" };
-
-        // Act
-        var text = data.ToString();
-
-        // Assert
-        Assert.Equal("Id = 1, Name = x", text); // The inner space is also suppressed
-    }
-
-    [Fact]
-    public void TestCustomBracket()
-    {
-        // Arrange
-        var data = new ToStringCustomBracketData { Id = 1, Name = "x" };
-
-        // Act
-        var text = data.ToString();
-
-        // Assert
-        Assert.Equal("ToStringCustomBracketData << Id:1 | Name:x >>", text);
-    }
-
-    // ------------------------------------------------------------
-    // Collection
-    // ------------------------------------------------------------
-
-    [Fact]
-    public void TestCollectionLimit()
-    {
-        // Arrange
-        var over = new ToStringCollectionLimitData { Values = [1, 2, 3, 4, 5] };
-        var just = new ToStringCollectionLimitData { Values = [1, 2, 3] };
-        var under = new ToStringCollectionLimitData { Values = [1, 2] };
-
-        // Act
-        var overText = over.ToString();
-        var justText = just.ToString();
-        var underText = under.ToString();
-
-        // Assert
-        Assert.Equal("ToStringCollectionLimitData { Values = [1, 2, 3, ...] }", overText);
-        Assert.Equal("ToStringCollectionLimitData { Values = [1, 2, 3] }", justText);
-        Assert.Equal("ToStringCollectionLimitData { Values = [1, 2] }", underText);
-    }
-
-    [Fact]
-    public void TestCollectionStyle()
-    {
-        // Arrange
-        var withValues = new ToStringCollectionStyleData { Values = [1, 2] };
-        var withEmpty = new ToStringCollectionStyleData { Values = [] };
-
-        // Act
-        var withValuesText = withValues.ToString();
-        var withEmptyText = withEmpty.ToString();
-
-        // Assert
-        Assert.Equal("ToStringCollectionStyleData { Values = ( 1 / 2 ) }", withValuesText);
-        Assert.Equal("ToStringCollectionStyleData { Values = () }", withEmptyText); // The inner space is not output for an empty collection
-    }
-
-    // ------------------------------------------------------------
-    // Member attribute
-    // ------------------------------------------------------------
 
     [Fact]
     public void TestMask()

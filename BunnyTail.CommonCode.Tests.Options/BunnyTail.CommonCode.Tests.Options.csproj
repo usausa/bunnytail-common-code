@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <CodeAnalysisRuleSet>..\Analyzers.ruleset</CodeAnalysisRuleSet>
+    <RootNamespace>BunnyTail.CommonCode.Options</RootNamespace>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <TestingPlatformShowTestsFailure>true</TestingPlatformShowTestsFailure>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <CommonCodeGeneratorToStringTypeName>Full</CommonCodeGeneratorToStringTypeName>
+    <CommonCodeGeneratorToStringTypeArgument>None</CommonCodeGeneratorToStringTypeArgument>
+    <CommonCodeGeneratorToStringNullLiteral>&lt;null&gt;</CommonCodeGeneratorToStringNullLiteral>
+    <CommonCodeGeneratorToStringMembers>PropertyAndField</CommonCodeGeneratorToStringMembers>
+    <CommonCodeGeneratorToStringBracket>Parenthesis</CommonCodeGeneratorToStringBracket>
+    <CommonCodeGeneratorToStringOpenBracket>&lt;&lt;</CommonCodeGeneratorToStringOpenBracket>
+    <CommonCodeGeneratorToStringInnerSpace>None</CommonCodeGeneratorToStringInnerSpace>
+    <CommonCodeGeneratorToStringTypeNameSpace>None</CommonCodeGeneratorToStringTypeNameSpace>
+    <CommonCodeGeneratorToStringSeparator>" | "</CommonCodeGeneratorToStringSeparator>
+    <CommonCodeGeneratorToStringAssign>:</CommonCodeGeneratorToStringAssign>
+    <CommonCodeGeneratorToStringCollectionBracket>Angle</CommonCodeGeneratorToStringCollectionBracket>
+    <CommonCodeGeneratorToStringCollectionInnerSpace>Space</CommonCodeGeneratorToStringCollectionInnerSpace>
+    <CommonCodeGeneratorToStringCollectionSeparator>/</CommonCodeGeneratorToStringCollectionSeparator>
+    <CommonCodeGeneratorToStringCollectionLimit>2</CommonCodeGeneratorToStringCollectionLimit>
+  </PropertyGroup>
+
+  <Import Project="..\BunnyTail.CommonCode.props" />
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.9.0" />
+    <PackageReference Include="xunit.v3.mtp-v2" Version="3.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BunnyTail.CommonCode.Generator\BunnyTail.CommonCode.Generator.csproj" OutputItemType="analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\BunnyTail.CommonCode\BunnyTail.CommonCode.csproj" />
+  </ItemGroup>
+
+</Project>
