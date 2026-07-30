@@ -146,10 +146,10 @@ public partial struct ToStringStructData
 [GenerateToString]
 public partial class ToStringMaskData
 {
-    [ToStringMask]
+    [ValueFormat(Mask = true)]
     public string Password { get; set; } = default!;
 
-    [ToStringMask(Show = 2)]
+    [ValueFormat(Mask = true, MaskShow = 2)]
     public string Token { get; set; } = default!;
 }
 
@@ -157,7 +157,7 @@ public partial class ToStringMaskData
 [GenerateToString]
 public partial class ToStringMaskedCollectionData
 {
-    [ToStringMask]
+    [ValueFormat(Mask = true)]
     public string[]? Secrets { get; set; }
 
     public int[]? Values { get; set; }
@@ -167,17 +167,17 @@ public partial class ToStringMaskedCollectionData
 [GenerateToString]
 public partial class ToStringFormatData
 {
-    [ToStringFormat("000")]
+    [ValueFormat("000")]
     public int Code { get; set; }
 
-    [ToStringFormat("X4")]
+    [ValueFormat("X4")]
     public int Hex { get; set; }
 }
 
 [GenerateToString]
 public partial class ToStringMaxLengthData
 {
-    [ToStringMaxLength(3)]
+    [ValueFormat(MaxLength = 3)]
     public string Description { get; set; } = default!;
 
     public string Name { get; set; } = default!;
@@ -186,8 +186,7 @@ public partial class ToStringMaxLengthData
 [GenerateToString]
 public partial class ToStringFormatMaxLengthData
 {
-    [ToStringFormat("000000")]
-    [ToStringMaxLength(3)]
+    [ValueFormat("000000", MaxLength = 3)]
     public int Number { get; set; }
 }
 
@@ -376,8 +375,8 @@ public class ToStringTest
         var nullText = nullValue.ToString();
 
         // Assert
-        Assert.Equal("ToStringMaskData { Password = ***, Token = ***34 }", maskedText); // Shows only the trailing characters specified by Show
-        Assert.Equal("ToStringMaskData { Password = ***, Token = *** }", shortText);    // For lengths up to Show, the tail is hidden and only *** is shown
+        Assert.Equal("ToStringMaskData { Password = ***, Token = ***34 }", maskedText); // Shows only the trailing characters specified by MaskShow
+        Assert.Equal("ToStringMaskData { Password = ***, Token = *** }", shortText);    // For lengths up to MaskShow, the tail is hidden and only *** is shown
         Assert.Equal("ToStringMaskData { Password = null, Token = null }", nullText);   // null is not masked and follows the null setting
     }
 
@@ -405,7 +404,7 @@ public class ToStringTest
         var text = data.ToString();
 
         // Assert
-        Assert.Equal("ToStringFormatData { Code = 007, Hex = 00FF }", text); // The ToStringFormat format is applied
+        Assert.Equal("ToStringFormatData { Code = 007, Hex = 00FF }", text); // The ValueFormat format is applied
     }
 
     [Fact]

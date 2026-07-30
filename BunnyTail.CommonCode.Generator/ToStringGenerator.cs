@@ -18,9 +18,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 {
     private const string GenerateAttributeName = "BunnyTail.CommonCode.GenerateToStringAttribute";
     private const string IgnoreAttributeName = "BunnyTail.CommonCode.IgnoreToStringAttribute";
-    private const string FormatAttributeName = "BunnyTail.CommonCode.ToStringFormatAttribute";
-    private const string MaskAttributeName = "BunnyTail.CommonCode.ToStringMaskAttribute";
-    private const string MaxLengthAttributeName = "BunnyTail.CommonCode.ToStringMaxLengthAttribute";
+    private const string ValueFormatAttributeName = "BunnyTail.CommonCode.ValueFormatAttribute";
 
     private const string GenericEnumerableName = "System.Collections.Generic.IEnumerable<T>";
 
@@ -144,106 +142,62 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 
     private static SettingsModel ResolveSettings(OptionModel options)
     {
-        var style = options.Style != StyleOption.Inherit ? options.Style : StyleOption.Default;
+        // 未指定の項目はプリセットの値を使用する。Record スタイルとの差があるのは以下の 4 項目のみ。
+        // An unspecified option falls back to the preset value. Only the following four differ from the record style.
+        var record = options.Style == StyleOption.Record;
 
-        var resolved = Merge(GetPreset(style), options);
+        var typeArgument = options.TypeArgument != TypeArgumentOption.Inherit
+            ? options.TypeArgument
+            : record ? TypeArgumentOption.None : TypeArgumentOption.Include;
+        var nullMode = options.Null != NullOption.Inherit
+            ? options.Null
+            : record ? NullOption.Empty : NullOption.Literal;
+        var collection = options.Collection != CollectionOption.Inherit
+            ? options.Collection
+            : record ? CollectionOption.Raw : CollectionOption.Expand;
+        var members = options.Members != MemberKindOption.Inherit
+            ? options.Members
+            : record ? MemberKindOption.PropertyAndField : MemberKindOption.Property;
 
-        var openBracket = ResolveBracket(resolved.Bracket, resolved.OpenBracket, true);
-        var closeBracket = ResolveBracket(resolved.Bracket, resolved.CloseBracket, false);
-        var collectionOpenBracket = ResolveBracket(resolved.CollectionBracket, resolved.CollectionOpenBracket, true);
-        var collectionCloseBracket = ResolveBracket(resolved.CollectionBracket, resolved.CollectionCloseBracket, false);
+        var typeName = options.TypeName != TypeNameOption.Inherit ? options.TypeName : TypeNameOption.Simple;
+        var nullLiteral = !String.IsNullOrEmpty(options.NullLiteral) ? options.NullLiteral! : "null";
+        var collectionLimit = options.CollectionLimit != 0 ? options.CollectionLimit : -1;
+        var innerSpace = options.InnerSpace != SpaceOption.Inherit ? options.InnerSpace : SpaceOption.Space;
+        var typeNameSpace = options.TypeNameSpace != SpaceOption.Inherit ? options.TypeNameSpace : SpaceOption.Space;
+        var separator = !String.IsNullOrEmpty(options.Separator) ? options.Separator! : ", ";
+        var assign = !String.IsNullOrEmpty(options.Assign) ? options.Assign! : " = ";
+        var collectionInnerSpace = options.CollectionInnerSpace != SpaceOption.Inherit ? options.CollectionInnerSpace : SpaceOption.None;
+        var collectionSeparator = !String.IsNullOrEmpty(options.CollectionSeparator) ? options.CollectionSeparator! : ", ";
 
-        var typeName = resolved.TypeName;
+        var bracket = options.Bracket != BracketOption.Inherit ? options.Bracket : BracketOption.Brace;
+        var openBracket = ResolveBracket(bracket, options.OpenBracket, true);
+        var closeBracket = ResolveBracket(bracket, options.CloseBracket, false);
         var hasBracket = (openBracket.Length > 0) || (closeBracket.Length > 0);
+
+        var collectionBracket = options.CollectionBracket != BracketOption.Inherit ? options.CollectionBracket : BracketOption.Square;
+        var collectionOpenBracket = ResolveBracket(collectionBracket, options.CollectionOpenBracket, true);
+        var collectionCloseBracket = ResolveBracket(collectionBracket, options.CollectionCloseBracket, false);
         var hasCollectionBracket = (collectionOpenBracket.Length > 0) || (collectionCloseBracket.Length > 0);
 
         return new SettingsModel(
             typeName,
-            resolved.TypeArgument,
-            resolved.Null,
-            resolved.NullLiteral ?? string.Empty,
-            resolved.Collection,
-            resolved.CollectionLimit,
-            resolved.Members,
+            typeArgument,
+            nullMode,
+            nullLiteral,
+            collection,
+            collectionLimit,
+            members,
             openBracket,
             closeBracket,
-            hasBracket ? ResolveSpace(resolved.InnerSpace) : string.Empty,
-            typeName != TypeNameOption.None ? ResolveSpace(resolved.TypeNameSpace) : string.Empty,
-            resolved.Separator ?? string.Empty,
-            resolved.Assign ?? string.Empty,
+            hasBracket ? ResolveSpace(innerSpace) : string.Empty,
+            typeName != TypeNameOption.None ? ResolveSpace(typeNameSpace) : string.Empty,
+            separator,
+            assign,
             collectionOpenBracket,
             collectionCloseBracket,
-            hasCollectionBracket ? ResolveSpace(resolved.CollectionInnerSpace) : string.Empty,
-            resolved.CollectionSeparator ?? string.Empty);
+            hasCollectionBracket ? ResolveSpace(collectionInnerSpace) : string.Empty,
+            collectionSeparator);
     }
-
-    private static OptionModel GetPreset(StyleOption style) =>
-        style == StyleOption.Record
-            ? new OptionModel(
-                StyleOption.Record,
-                TypeNameOption.Simple,
-                TypeArgumentOption.None,
-                NullOption.Empty,
-                "null",
-                CollectionOption.Raw,
-                -1,
-                MemberKindOption.PropertyAndField,
-                BracketOption.Brace,
-                null,
-                null,
-                SpaceOption.Space,
-                SpaceOption.Space,
-                ", ",
-                " = ",
-                BracketOption.Square,
-                null,
-                null,
-                SpaceOption.None,
-                ", ")
-            : new OptionModel(
-                StyleOption.Default,
-                TypeNameOption.Simple,
-                TypeArgumentOption.Include,
-                NullOption.Literal,
-                "null",
-                CollectionOption.Expand,
-                -1,
-                MemberKindOption.Property,
-                BracketOption.Brace,
-                null,
-                null,
-                SpaceOption.Space,
-                SpaceOption.Space,
-                ", ",
-                " = ",
-                BracketOption.Square,
-                null,
-                null,
-                SpaceOption.None,
-                ", ");
-
-    private static OptionModel Merge(OptionModel baseModel, OptionModel overrideModel) =>
-        new(
-            baseModel.Style,
-            overrideModel.TypeName != TypeNameOption.Inherit ? overrideModel.TypeName : baseModel.TypeName,
-            overrideModel.TypeArgument != TypeArgumentOption.Inherit ? overrideModel.TypeArgument : baseModel.TypeArgument,
-            overrideModel.Null != NullOption.Inherit ? overrideModel.Null : baseModel.Null,
-            !String.IsNullOrEmpty(overrideModel.NullLiteral) ? overrideModel.NullLiteral : baseModel.NullLiteral,
-            overrideModel.Collection != CollectionOption.Inherit ? overrideModel.Collection : baseModel.Collection,
-            overrideModel.CollectionLimit != 0 ? overrideModel.CollectionLimit : baseModel.CollectionLimit,
-            overrideModel.Members != MemberKindOption.Inherit ? overrideModel.Members : baseModel.Members,
-            overrideModel.Bracket != BracketOption.Inherit ? overrideModel.Bracket : baseModel.Bracket,
-            !String.IsNullOrEmpty(overrideModel.OpenBracket) ? overrideModel.OpenBracket : baseModel.OpenBracket,
-            !String.IsNullOrEmpty(overrideModel.CloseBracket) ? overrideModel.CloseBracket : baseModel.CloseBracket,
-            overrideModel.InnerSpace != SpaceOption.Inherit ? overrideModel.InnerSpace : baseModel.InnerSpace,
-            overrideModel.TypeNameSpace != SpaceOption.Inherit ? overrideModel.TypeNameSpace : baseModel.TypeNameSpace,
-            !String.IsNullOrEmpty(overrideModel.Separator) ? overrideModel.Separator : baseModel.Separator,
-            !String.IsNullOrEmpty(overrideModel.Assign) ? overrideModel.Assign : baseModel.Assign,
-            overrideModel.CollectionBracket != BracketOption.Inherit ? overrideModel.CollectionBracket : baseModel.CollectionBracket,
-            !String.IsNullOrEmpty(overrideModel.CollectionOpenBracket) ? overrideModel.CollectionOpenBracket : baseModel.CollectionOpenBracket,
-            !String.IsNullOrEmpty(overrideModel.CollectionCloseBracket) ? overrideModel.CollectionCloseBracket : baseModel.CollectionCloseBracket,
-            overrideModel.CollectionInnerSpace != SpaceOption.Inherit ? overrideModel.CollectionInnerSpace : baseModel.CollectionInnerSpace,
-            !String.IsNullOrEmpty(overrideModel.CollectionSeparator) ? overrideModel.CollectionSeparator : baseModel.CollectionSeparator);
 
     private static string ResolveBracket(BracketOption bracket, string? value, bool open)
     {
@@ -399,33 +353,48 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         var (hasElements, isNullAssignable, isElementNullAssignable) = GetMemberType(type);
 
         string? format = null;
-        int? maxLength = null;
+        var maxLength = 0;
         var mask = false;
         var maskShow = 0;
-        foreach (var attr in symbol.GetAttributes())
+
+        var attr = symbol.GetAttributes()
+            .FirstOrDefault(static x => x.AttributeClass?.ToDisplayString() == ValueFormatAttributeName);
+        if (attr is not null)
         {
-            switch (attr.AttributeClass?.ToDisplayString())
+            if ((attr.ConstructorArguments.Length > 0) && (attr.ConstructorArguments[0].Value is string formatArgument))
             {
-                case FormatAttributeName:
-                    if ((attr.ConstructorArguments.Length > 0) && (attr.ConstructorArguments[0].Value is string formatValue))
-                    {
-                        format = formatValue;
-                    }
-                    break;
-                case MaxLengthAttributeName:
-                    if ((attr.ConstructorArguments.Length > 0) && (attr.ConstructorArguments[0].Value is int maxLengthValue))
-                    {
-                        maxLength = maxLengthValue;
-                    }
-                    break;
-                case MaskAttributeName:
-                    mask = true;
-                    var showArg = attr.NamedArguments.FirstOrDefault(static na => na.Key == "Show");
-                    if (!showArg.Value.IsNull && (showArg.Value.Value is int showValue))
-                    {
-                        maskShow = showValue;
-                    }
-                    break;
+                format = formatArgument;
+            }
+
+            foreach (var argument in attr.NamedArguments)
+            {
+                switch (argument.Key)
+                {
+                    case "Format":
+                        if (argument.Value.Value is string formatValue)
+                        {
+                            format = formatValue;
+                        }
+                        break;
+                    case "MaxLength":
+                        if (argument.Value.Value is int maxLengthValue)
+                        {
+                            maxLength = maxLengthValue;
+                        }
+                        break;
+                    case "Mask":
+                        if (argument.Value.Value is bool maskValue)
+                        {
+                            mask = maskValue;
+                        }
+                        break;
+                    case "MaskShow":
+                        if (argument.Value.Value is int maskShowValue)
+                        {
+                            maskShow = maskShowValue;
+                        }
+                        break;
+                }
             }
         }
 
@@ -548,6 +517,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     private static void BuildMember(SourceBuilder builder, SettingsModel settings, TypeModel type)
     {
         var members = new List<MemberModel>();
+        // ReSharper disable once LoopCanBeConvertedToQuery
         foreach (var member in type.Members)
         {
             if (member.IsField && (settings.Members != MemberKindOption.PropertyAndField))
@@ -757,7 +727,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         {
             BuildAppendCollection(builder, settings, member);
         }
-        else if (member.MaxLength.HasValue)
+        else if (member.MaxLength > 0)
         {
             BuildAppendMasked(builder, settings, member);
         }
@@ -1006,14 +976,14 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             builder
                 .Indent()
                 .Append("if (value.Length > ")
-                .Append(member.MaxLength!.Value.ToString(CultureInfo.InvariantCulture))
+                .Append(member.MaxLength.ToString(CultureInfo.InvariantCulture))
                 .Append(")")
                 .NewLine();
             builder.BeginScope();
             builder
                 .Indent()
                 .Append("handler.AppendFormatted(value.Substring(0, ")
-                .Append(member.MaxLength!.Value.ToString(CultureInfo.InvariantCulture))
+                .Append(member.MaxLength.ToString(CultureInfo.InvariantCulture))
                 .Append("));")
                 .NewLine();
             builder.EndScope();
@@ -1121,10 +1091,10 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     // Models
     // ------------------------------------------------------------
 
+    // ReSharper disable once UnusedMember.Local
     private enum StyleOption
     {
-        Inherit = 0,
-        Default,
+        Default = 0,
         Record
     }
 
@@ -1164,6 +1134,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         PropertyAndField
     }
 
+    // ReSharper disable once UnusedMember.Local
     private enum BracketOption
     {
         Inherit = 0,
@@ -1243,7 +1214,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         bool IsNullAssignable,
         bool IsElementNullAssignable,
         string? Format,
-        int? MaxLength,
+        int MaxLength,
         bool Mask,
         int MaskShow);
 }
