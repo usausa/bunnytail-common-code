@@ -4,7 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <OutputType>Exe</OutputType>
     <CodeAnalysisRuleSet>..\Analyzers.ruleset</CodeAnalysisRuleSet>
-    <RootNamespace>BunnyTail.CommonCode.Options</RootNamespace>
+    <RootNamespace>BunnyTail.CommonCode</RootNamespace>
   </PropertyGroup>
 
   <PropertyGroup>

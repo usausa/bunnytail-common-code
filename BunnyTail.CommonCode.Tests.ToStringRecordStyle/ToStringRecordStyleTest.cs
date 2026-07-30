@@ -1,4 +1,4 @@
-namespace BunnyTail.CommonCode.RecordStyle;
+namespace BunnyTail.CommonCode;
 
 // CommonCodeGeneratorToStringStyle is set to Record for this project
 

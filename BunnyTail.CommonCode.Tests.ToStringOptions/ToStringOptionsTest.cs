@@ -1,4 +1,4 @@
-namespace BunnyTail.CommonCode.Options;
+namespace BunnyTail.CommonCode;
 
 // Individual MSBuild options are set for this project, see the csproj for the values
 
@@ -57,7 +57,7 @@ public class ToStringOptionsTest
         // CloseBracket falls back to Bracket=Parenthesis, InnerSpace=None, Assign=:,
         // Separator is quoted in the csproj so that the surrounding spaces are kept,
         // Members=PropertyAndField so Extra is output
-        Assert.Equal("BunnyTail.CommonCode.Options.OptionData<<Id:1 | Name:x | Values:< 1/2 > | Extra:9)", text);
+        Assert.Equal("BunnyTail.CommonCode.OptionData<<Id:1 | Name:x | Values:< 1/2 > | Extra:9)", text);
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class ToStringOptionsTest
         var text = data.ToString();
 
         // Assert
-        Assert.Equal("BunnyTail.CommonCode.Options.OptionData<<Id:1 | Name:<null> | Values:<null> | Extra:9)", text);
+        Assert.Equal("BunnyTail.CommonCode.OptionData<<Id:1 | Name:<null> | Values:<null> | Extra:9)", text);
     }
 
     [Fact]
@@ -85,9 +85,9 @@ public class ToStringOptionsTest
         var emptyText = empty.ToString();
 
         // Assert
-        Assert.Equal("BunnyTail.CommonCode.Options.OptionData<<Id:0 | Name:<null> | Values:< 1/2/... > | Extra:0)", overText);
+        Assert.Equal("BunnyTail.CommonCode.OptionData<<Id:0 | Name:<null> | Values:< 1/2/... > | Extra:0)", overText);
         // The collection inner space is not output for an empty collection
-        Assert.Equal("BunnyTail.CommonCode.Options.OptionData<<Id:0 | Name:<null> | Values:<> | Extra:0)", emptyText);
+        Assert.Equal("BunnyTail.CommonCode.OptionData<<Id:0 | Name:<null> | Values:<> | Extra:0)", emptyText);
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public class ToStringOptionsTest
 
         // Assert
         // TypeArgument=None so the type arguments are not output
-        Assert.Equal("BunnyTail.CommonCode.Options.OptionGenericData<<Value:1)", text);
+        Assert.Equal("BunnyTail.CommonCode.OptionGenericData<<Value:1)", text);
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public class ToStringOptionsTest
         var text = data.ToString();
 
         // Assert
-        Assert.Equal("BunnyTail.CommonCode.Options.OptionEmptyData<<)", text);
+        Assert.Equal("BunnyTail.CommonCode.OptionEmptyData<<)", text);
     }
 
     [Fact]
@@ -128,6 +128,6 @@ public class ToStringOptionsTest
 
         // Assert
         // The containing types are included in the full type name
-        Assert.Equal("BunnyTail.CommonCode.Options.OptionOuterData.InnerData<<Id:1)", text);
+        Assert.Equal("BunnyTail.CommonCode.OptionOuterData.InnerData<<Id:1)", text);
     }
 }
