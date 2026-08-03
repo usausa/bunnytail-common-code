@@ -1,3 +1,4 @@
+// ReSharper disable GrammarMistakeInComment
 namespace BunnyTail.CommonCode;
 
 [GenerateEquality]
@@ -90,8 +91,8 @@ public class EqualityHiddenBase
     public string Token { get; init; } = default!;
 }
 
-// The derived type hides the public member with new (different type) marked IgnoreEquality.
-// Since this.Token binds to the derived one (int) and cannot reach the base public one (string), Token is excluded (spec: only the reachable most-derived member is targeted).
+// The derived type hides the public member with new (different type) marked IgnoreEquality
+// Since this.Token binds to the derived one (int) and cannot reach the base public one (string), Token is excluded (spec: only the reachable most-derived member is targeted)
 [GenerateEquality]
 public partial class EqualityHiddenDerived : EqualityHiddenBase
 {
@@ -101,7 +102,7 @@ public partial class EqualityHiddenDerived : EqualityHiddenBase
     public string Label { get; init; } = default!;
 }
 
-// record struct: generator must not generate any Equals — built-in value equality must be preserved.
+// record struct: generator must not generate any Equals — built-in value equality must be preserved
 [GenerateEquality]
 // ReSharper disable once PartialTypeWithSinglePart
 internal partial record struct RecordStructData(int X);
@@ -315,7 +316,7 @@ public class EqualityTest
         var b = new StructData { Id = 7, Name = "X" };
 
         // Act & Assert — verify IEquatable<StructData> is callable via interface dispatch
-        // Box through object so the static analyzer cannot infer the concrete type.
+        // Box through object so the static analyzer cannot infer the concrete type
         object boxed = a;
         Assert.True(((IEquatable<StructData>)boxed).Equals(b));
     }

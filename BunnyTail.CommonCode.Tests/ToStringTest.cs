@@ -1,3 +1,4 @@
+// ReSharper disable StringLiteralTypo
 namespace BunnyTail.CommonCode;
 
 #pragma warning disable CA1819

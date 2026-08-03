@@ -1,3 +1,5 @@
+// ReSharper disable UnusedMemberInSuper.Global
+// ReSharper disable GrammarMistakeInComment
 namespace BunnyTail.CommonCode;
 
 public interface IDelegateToSimpleService
@@ -98,8 +100,7 @@ public sealed class DelegateToManualMethodCore : IDelegateToManualMethod
     public void Reset() => ResetCount++;
 }
 
-// When a single non-overloaded method GetMessage() is hand-written, its delegation is not generated,
-// and only the non-hand-written Reset() is generated
+// When a single non-overloaded method GetMessage() is hand-written, its delegation is not generated, and only the non-hand-written Reset() is generated
 [GenerateDelegateTo]
 public partial class DelegateToManualMethodFacade : IDelegateToManualMethod
 {
