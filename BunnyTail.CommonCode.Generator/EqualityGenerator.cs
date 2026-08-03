@@ -425,6 +425,10 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         }
     }
 
+    // ------------------------------------------------------------
+    // Helper
+    // ------------------------------------------------------------
+
     private static string MakeFilename(string ns, EquatableArray<ContainingTypeModel> containingTypes, string className, string suffix)
     {
         var buffer = new StringBuilder();
@@ -444,6 +448,10 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         buffer.Append(".g.cs");
         return buffer.ToString();
     }
+
+    // ------------------------------------------------------------
+    // Models
+    // ------------------------------------------------------------
 
     private sealed record ContainingTypeModel(
         string ClassName,

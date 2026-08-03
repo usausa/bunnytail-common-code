@@ -271,6 +271,10 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         }
     }
 
+    // ------------------------------------------------------------
+    // Helper
+    // ------------------------------------------------------------
+
     private static string MakeFilename(string ns, EquatableArray<ContainingTypeModel> containingTypes, string className, string suffix)
     {
         var buffer = new StringBuilder();
@@ -291,9 +295,17 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         return buffer.ToString();
     }
 
+    // ------------------------------------------------------------
+    // Models
+    // ------------------------------------------------------------
+
     private sealed record ContainingTypeModel(
         string ClassName,
         bool IsValueType);
+
+    private sealed record CompareKeyModel(
+        string Name,
+        string TypeName);
 
     private sealed record CompareToTypeModel(
         string Namespace,
@@ -302,8 +314,4 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         bool IsValueType,
         bool GenerateOperators,
         EquatableArray<CompareKeyModel> Keys);
-
-    private sealed record CompareKeyModel(
-        string Name,
-        string TypeName);
 }

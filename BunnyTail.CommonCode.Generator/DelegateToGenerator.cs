@@ -489,6 +489,10 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         }
     }
 
+    // ------------------------------------------------------------
+    // Helper
+    // ------------------------------------------------------------
+
     private static string MakeFilename(string ns, EquatableArray<ContainingTypeModel> containingTypes, string className, string suffix)
     {
         var buffer = new StringBuilder();
@@ -508,6 +512,10 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         buffer.Append(".g.cs");
         return buffer.ToString();
     }
+
+    // ------------------------------------------------------------
+    // Models
+    // ------------------------------------------------------------
 
     private sealed record ContainingTypeModel(
         string ClassName,
