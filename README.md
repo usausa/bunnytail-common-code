@@ -387,4 +387,3 @@ The generator will not emit a member if the containing type already defines it, 
 | BTCC0401 | Warning | Type must be partial |
 | BTCC0402 | Warning | No `[DelegateTo]` field or property found |
 | BTCC0403 | Warning | `InterfaceType` must be an interface implemented by the delegate member type |
-

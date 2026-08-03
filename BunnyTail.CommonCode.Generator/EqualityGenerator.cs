@@ -268,11 +268,9 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         for (var i = 0; i < properties.Count; i++)
         {
             var prop = properties[i];
-            // TODO この&&は前の行の終端につけたい
             if (i > 0)
             {
-                builder.NewLine();
-                builder.Indent().Append("    && ");
+                builder.Indent().Append("    ");
             }
 
             if (prop.IsCollection && type.DeepCollectionEquality)
@@ -294,6 +292,11 @@ public sealed class EqualityGenerator : IIncrementalGenerator
                     .Append(", other.")
                     .Append(prop.Name)
                     .Append(")");
+            }
+
+            if (i < (properties.Count - 1))
+            {
+                builder.Append(" &&").NewLine();
             }
         }
 
