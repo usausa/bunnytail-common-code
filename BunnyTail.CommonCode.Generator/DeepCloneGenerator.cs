@@ -223,7 +223,6 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
 
         builder.Indent().Append("var clone = new ").Append(type.ClassName);
 
-        // init 専用プロパティはコンストラクション後に代入できないため、オブジェクト初期化子で設定する
         // init-only properties cannot be assigned after construction, so set them via the object initializer
         var hasInit = false;
         foreach (var prop in properties)
@@ -256,7 +255,6 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
             builder.Append("();").NewLine();
         }
 
-        // set 可能なプロパティは代入で設定する
         // Settable properties are set via assignment
         foreach (var prop in properties)
         {
