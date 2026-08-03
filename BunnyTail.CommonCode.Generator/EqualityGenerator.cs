@@ -51,9 +51,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             return Results.Error<EqualityTypeModel>(new DiagnosticInfo(Diagnostics.EqualityInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
-        var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name)
-            ? string.Empty
-            : symbol.ContainingNamespace.ToDisplayString();
+        var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name) ? string.Empty : symbol.ContainingNamespace.ToDisplayString();
 
         var containingTypes = default(List<ContainingTypeModel>?);
         var containingSymbol = symbol.ContainingType;
@@ -65,13 +63,11 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         }
         containingTypes?.Reverse();
 
-        var attr = symbol.GetAttributes()
-            .First(static x => x.AttributeClass?.ToDisplayString() == GenerateAttributeName);
+        var attr = symbol.GetAttributes().First(static x => x.AttributeClass?.ToDisplayString() == GenerateAttributeName);
 
-        var generateOperators = GetBoolArg(attr, "GenerateOperators") ?? true;
-        var deepCollectionEquality = GetBoolArg(attr, "DeepCollectionEquality") ?? false;
+        var generateOperators = GetBoolArg(attr, nameof(EqualityTypeModel.GenerateOperators)) ?? true;
+        var deepCollectionEquality = GetBoolArg(attr, nameof(EqualityTypeModel.DeepCollectionEquality)) ?? false;
 
-        // 等価判定/ハッシュは、到達できる public プロパティを基底型まで辿って収集する (フラット仕様)
         // For equality / hash, collect reachable public properties walking up to base types (flat spec)
         var properties = new List<EqualityPropertyModel>();
         var seenNames = new HashSet<string>(StringComparer.Ordinal);
@@ -80,35 +76,19 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         {
             foreach (var member in currentSymbol.GetMembers().OfType<IPropertySymbol>())
             {
-                // インデクサは this.<Name> でアクセスできないため対象外
-                // Indexers are excluded because they cannot be accessed via this.<Name>
-                if (member.IsIndexer)
-                {
-                    continue;
-                }
-
-                // this.<Name> は最派生の宣言に束縛されるため、隠蔽された基底側の同名プロパティは収集しない。
-                // 可視性 / IgnoreEquality 判定より前で登録するのは意図的: 派生の private / ignore な new 隠蔽でも、
-                // this.<Name> から到達できない基底 public を誤って拾わず、コンパイルエラーや誤比較を防ぐ。
-                // Since this.<Name> binds to the most-derived declaration, a hidden base property of the same name is not collected.
-                // Registering before the visibility / IgnoreEquality check is intentional: even for a derived private / ignored new-hiding member,
-                // this avoids wrongly picking up a base public unreachable from this.<Name>, preventing compile errors or incorrect comparisons.
+                // Skip duplicate property names (hides base property)
                 if (!seenNames.Add(member.Name))
                 {
                     continue;
                 }
 
-                if (member.DeclaredAccessibility != Accessibility.Public)
+                // Exclude indexers and non-public properties
+                if (member.IsIndexer || (member.DeclaredAccessibility != Accessibility.Public))
                 {
                     continue;
                 }
 
-                if (member.GetMethod is null)
-                {
-                    continue;
-                }
-
-                if (member.IsWriteOnly)
+                if ((member.GetMethod is null) || member.IsWriteOnly)
                 {
                     continue;
                 }
@@ -179,7 +159,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
 
         foreach (var iface in typeSymbol.AllInterfaces)
         {
-            if (iface.IsGenericType && iface.ConstructedFrom.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>")
+            if (iface.IsGenericType && (iface.ConstructedFrom.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>"))
             {
                 return true;
             }
@@ -288,6 +268,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         for (var i = 0; i < properties.Count; i++)
         {
             var prop = properties[i];
+            // TODO この&&は前の行の終端につけたい
             if (i > 0)
             {
                 builder.NewLine();
@@ -344,7 +325,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         builder.Indent().Append("return hash.ToHashCode();").NewLine();
         builder.EndScope();
 
-        // operators
+        // Operators
         if (type.GenerateOperators)
         {
             builder.NewLine();
@@ -457,6 +438,11 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         string ClassName,
         bool IsValueType);
 
+    private sealed record EqualityPropertyModel(
+        string Name,
+        bool IsCollection,
+        string TypeName);
+
     private sealed record EqualityTypeModel(
         string Namespace,
         EquatableArray<ContainingTypeModel> ContainingTypes,
@@ -466,9 +452,4 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         bool GenerateOperators,
         bool DeepCollectionEquality,
         EquatableArray<EqualityPropertyModel> Properties);
-
-    private sealed record EqualityPropertyModel(
-        string Name,
-        bool IsCollection,
-        string TypeName);
 }

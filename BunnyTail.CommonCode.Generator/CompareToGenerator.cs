@@ -64,7 +64,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         containingTypes?.Reverse();
 
         var attributes = symbol.GetAttributes().First(static x => x.AttributeClass?.ToDisplayString() == GenerateAttributeName);
-        var generateOperators = GetBoolArg(attributes, "GenerateOperators") ?? true;
+        var generateOperators = GetBoolArg(attributes, nameof(CompareToTypeModel.GenerateOperators)) ?? true;
 
         var keys = new List<(int Order, string Name, string TypeName)>();
         // ReSharper disable once LoopCanBeConvertedToQuery
