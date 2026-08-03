@@ -115,15 +115,10 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                 continue;
             }
 
-            // 明示指定された InterfaceType を取得
             // Get the explicitly specified InterfaceType
             var delegateAttr = memberAttrs.First(static x => x.AttributeClass?.ToDisplayString() == DelegateToAttributeName);
             var specifiedInterface = GetInterfaceTypeArg(delegateAttr);
 
-            // 委譲対象のインターフェースを解決する
-            //  - InterfaceType が指定された場合はその型 (メンバ型が実装しているか検証)
-            //  - メンバ型がインターフェースの場合はそのインターフェース
-            //  - メンバ型が具象型の場合はその型が実装するインターフェース群
             // Resolve the interfaces to delegate to
             //  - If InterfaceType is specified, that type (verifying the member type implements it)
             //  - If the member type is an interface, that interface
@@ -143,7 +138,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
 
                 interfaces = WithBaseInterfaces(specifiedInterface);
             }
-            else if (memberType is INamedTypeSymbol namedMemberType && memberType.TypeKind == TypeKind.Interface)
+            else if (memberType is INamedTypeSymbol namedMemberType && (memberType.TypeKind == TypeKind.Interface))
             {
                 interfaces = WithBaseInterfaces(namedMemberType);
             }
@@ -181,9 +176,8 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                             continue;
                         }
 
-                        var parameters = method.Parameters.Select(static x =>
-                            new ParameterModel(x.Type.ToDisplayString(), x.Name, x.RefKind)).ToArray();
-                        var typeParams = method.TypeParameters.Select(static x => x.Name).ToArray();
+                        var parameters = method.Parameters.Select(x => new ParameterModel(x.Type.ToDisplayString(), x.Name, x.RefKind)).ToArray();
+                        var typeParams = method.TypeParameters.Select(x => x.Name).ToArray();
 
                         methods.Add(new DelegateMethodModel(
                             method.Name,
