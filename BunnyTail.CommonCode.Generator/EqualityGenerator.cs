@@ -66,7 +66,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         containingTypes?.Reverse();
 
         var attr = symbol.GetAttributes()
-            .First(a => a.AttributeClass?.ToDisplayString() == GenerateAttributeName);
+            .First(static x => x.AttributeClass?.ToDisplayString() == GenerateAttributeName);
 
         var generateOperators = GetBoolArg(attr, "GenerateOperators") ?? true;
         var deepCollectionEquality = GetBoolArg(attr, "DeepCollectionEquality") ?? false;
@@ -113,7 +113,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
                     continue;
                 }
 
-                if (member.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == IgnoreAttributeName))
+                if (member.GetAttributes().Any(static x => x.AttributeClass?.ToDisplayString() == IgnoreAttributeName))
                 {
                     continue;
                 }
@@ -145,7 +145,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
 
     private static bool? GetBoolArg(AttributeData attr, string name)
     {
-        var arg = attr.NamedArguments.FirstOrDefault(na => na.Key == name);
+        var arg = attr.NamedArguments.FirstOrDefault(x => x.Key == name);
         if (arg.Value.IsNull)
         {
             return null;
@@ -390,7 +390,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         }
 
         // SequenceEqualOrBothNull helper
-        if (type.DeepCollectionEquality && properties.Any(p => p.IsCollection))
+        if (type.DeepCollectionEquality && properties.Any(static x => x.IsCollection))
         {
             builder.NewLine();
             builder.Indent()

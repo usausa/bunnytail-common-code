@@ -63,7 +63,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         }
         containingTypes?.Reverse();
 
-        var attributes = symbol.GetAttributes().First(a => a.AttributeClass?.ToDisplayString() == GenerateAttributeName);
+        var attributes = symbol.GetAttributes().First(static x => x.AttributeClass?.ToDisplayString() == GenerateAttributeName);
         var generateOperators = GetBoolArg(attributes, "GenerateOperators") ?? true;
 
         var keys = new List<(int Order, string Name, string TypeName)>();
@@ -76,7 +76,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var keyAttr = member.GetAttributes().FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == CompareKeyAttributeName);
+            var keyAttr = member.GetAttributes().FirstOrDefault(static x => x.AttributeClass?.ToDisplayString() == CompareKeyAttributeName);
             if (keyAttr is null)
             {
                 continue;
@@ -104,7 +104,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
 
     private static bool? GetBoolArg(AttributeData attr, string name)
     {
-        var arg = attr.NamedArguments.FirstOrDefault(na => na.Key == name);
+        var arg = attr.NamedArguments.FirstOrDefault(x => x.Key == name);
         if (arg.Value.IsNull)
         {
             return null;
@@ -120,7 +120,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
 
     private static int? GetIntArg(AttributeData attr, string name)
     {
-        var arg = attr.NamedArguments.FirstOrDefault(na => na.Key == name);
+        var arg = attr.NamedArguments.FirstOrDefault(x => x.Key == name);
         if (arg.Value.IsNull)
         {
             return null;

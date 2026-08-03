@@ -56,8 +56,8 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         }
 
         // Check whether IDeepCloneable<T> is implemented
-        var implementsDeepCloneable = symbol.AllInterfaces.Any(i =>
-            i.IsGenericType && i.ConstructedFrom.ToDisplayString() == IDeepCloneableName);
+        var implementsDeepCloneable = symbol.AllInterfaces.Any(static x =>
+            x.IsGenericType && x.ConstructedFrom.ToDisplayString() == IDeepCloneableName);
         if (!implementsDeepCloneable)
         {
             return Results.Error<DeepCloneTypeModel>(new DiagnosticInfo(Diagnostics.DeepCloneNotImplementIDeepCloneable, syntax.Identifier.GetLocation(), symbol.Name));
@@ -90,12 +90,12 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
                 continue;
             }
 
-            if (member.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == CloneIgnoreAttributeName))
+            if (member.GetAttributes().Any(static x => x.AttributeClass?.ToDisplayString() == CloneIgnoreAttributeName))
             {
                 continue;
             }
 
-            var shallow = member.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == ShallowCloneAttributeName);
+            var shallow = member.GetAttributes().Any(static x => x.AttributeClass?.ToDisplayString() == ShallowCloneAttributeName);
             var cloneStrategy = shallow ? CloneStrategy.Shallow : GetCloneStrategy(member.Type);
 
             if (!shallow && (cloneStrategy == CloneStrategy.Unknown))

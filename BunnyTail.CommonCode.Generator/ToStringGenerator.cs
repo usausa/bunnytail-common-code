@@ -353,8 +353,8 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     {
         var (hasElements, isNullAssignable, isElementNullAssignable) = GetMemberType(type);
 
-        string? format = null;
-        string? maskPattern = null;
+        var format = default(string?);
+        var maskPattern = default(string?);
         var maskChar = '\0';
         var maxLength = 0;
 

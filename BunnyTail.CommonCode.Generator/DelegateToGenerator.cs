@@ -117,7 +117,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
 
             // 明示指定された InterfaceType を取得
             // Get the explicitly specified InterfaceType
-            var delegateAttr = memberAttrs.First(a => a.AttributeClass?.ToDisplayString() == DelegateToAttributeName);
+            var delegateAttr = memberAttrs.First(static x => x.AttributeClass?.ToDisplayString() == DelegateToAttributeName);
             var specifiedInterface = GetInterfaceTypeArg(delegateAttr);
 
             // 委譲対象のインターフェースを解決する
@@ -181,9 +181,9 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                             continue;
                         }
 
-                        var parameters = method.Parameters.Select(p =>
-                            new ParameterModel(p.Type.ToDisplayString(), p.Name, p.RefKind)).ToArray();
-                        var typeParams = method.TypeParameters.Select(tp => tp.Name).ToArray();
+                        var parameters = method.Parameters.Select(static x =>
+                            new ParameterModel(x.Type.ToDisplayString(), x.Name, x.RefKind)).ToArray();
+                        var typeParams = method.TypeParameters.Select(static x => x.Name).ToArray();
 
                         methods.Add(new DelegateMethodModel(
                             method.Name,
