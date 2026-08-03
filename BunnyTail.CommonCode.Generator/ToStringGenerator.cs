@@ -31,8 +31,6 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     private const string TypeNameCacheField = "GeneratedToStringPrefix";
     private const string TypeNameFormatMethod = "GeneratedToStringFormatTypeName";
 
-    // C# のキーワードを持つ型は typeof(int) のように別名で出力する
-    // Types that have a C# keyword are written using the keyword, such as int instead of Int32
     private static readonly string[] PrimitiveTypeNames =
     [
         "bool",
@@ -117,7 +115,6 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     private static string? GetStringOption(AnalyzerConfigOptions options, string name) =>
         Unquote(options.GetValue<string?>(OptionPrefix + name));
 
-    // MSBuild はプロパティ値の前後の空白を除去するため、引用符で囲むことで空白を含む値を指定できるようにする。
     // MSBuild trims the surrounding whitespace of a property value, so quoting allows a value that contains it.
     private static string? Unquote(string? value) =>
         (value is not null) && (value.Length >= 2) && (value[0] == '"') && (value[value.Length - 1] == '"')
