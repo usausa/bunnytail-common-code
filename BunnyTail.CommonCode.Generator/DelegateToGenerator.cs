@@ -51,9 +51,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
             return Results.Error<DelegateToTypeModel>(new DiagnosticInfo(Diagnostics.DelegateToInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
-        var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name)
-            ? string.Empty
-            : symbol.ContainingNamespace.ToDisplayString();
+        var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name) ? string.Empty : symbol.ContainingNamespace.ToDisplayString();
 
         var containingTypes = default(List<ContainingTypeModel>?);
         var containingSymbol = symbol.ContainingType;
@@ -68,8 +66,6 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         var delegateGroups = new List<DelegateGroupModel>();
         var diagnostics = new List<DiagnosticInfo>();
 
-        // 既にクラスが実装しているメンバを収集 (手書きで実装しているものはスキップ)
-        // メソッドはオーバーロードを区別するためシグネチャ単位で扱う
         // Collect members the class already implements (hand-written implementations are skipped)
         // Methods are handled per signature to distinguish overloads
         var existingSignatures = new HashSet<string>(StringComparer.Ordinal);
@@ -87,13 +83,13 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
 
         foreach (var member in symbol.GetMembers())
         {
-            ITypeSymbol? memberType = null;
-            string? memberName = null;
-            ImmutableArray<AttributeData> memberAttrs = default;
+            var memberType = default(ITypeSymbol?);
+            var memberName = default(string?);
+            var memberAttrs = default(ImmutableArray<AttributeData>);
 
             if (member is IFieldSymbol field)
             {
-                if (!field.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == DelegateToAttributeName))
+                if (!field.GetAttributes().Any(static x => x.AttributeClass?.ToDisplayString() == DelegateToAttributeName))
                 {
                     continue;
                 }
@@ -104,7 +100,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
             }
             else if (member is IPropertySymbol prop)
             {
-                if (!prop.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == DelegateToAttributeName))
+                if (!prop.GetAttributes().Any(static x => x.AttributeClass?.ToDisplayString() == DelegateToAttributeName))
                 {
                     continue;
                 }
@@ -114,7 +110,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                 memberAttrs = prop.GetAttributes();
             }
 
-            if (memberType is null || memberName is null)
+            if ((memberType is null) || (memberName is null))
             {
                 continue;
             }
@@ -252,7 +248,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
 
     private static INamedTypeSymbol? GetInterfaceTypeArg(AttributeData attr)
     {
-        var arg = attr.NamedArguments.FirstOrDefault(na => na.Key == "InterfaceType");
+        var arg = attr.NamedArguments.FirstOrDefault(static x => x.Key == "InterfaceType");
         if (arg.Value.IsNull)
         {
             return null;
@@ -521,16 +517,10 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         string ClassName,
         bool IsValueType);
 
-    private sealed record DelegateToTypeModel(
-        string Namespace,
-        EquatableArray<ContainingTypeModel> ContainingTypes,
-        string ClassName,
-        bool IsValueType,
-        EquatableArray<DelegateGroupModel> Groups);
-
-    private sealed record DelegateGroupModel(
-        string MemberName,
-        EquatableArray<DelegateMethodModel> Methods);
+    private sealed record ParameterModel(
+        string TypeName,
+        string Name,
+        RefKind RefKind);
 
     private sealed record DelegateMethodModel(
         string Name,
@@ -542,8 +532,14 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         bool HasGetter = false,
         bool HasSetter = false);
 
-    private sealed record ParameterModel(
-        string TypeName,
-        string Name,
-        RefKind RefKind);
+    private sealed record DelegateGroupModel(
+        string MemberName,
+        EquatableArray<DelegateMethodModel> Methods);
+
+    private sealed record DelegateToTypeModel(
+        string Namespace,
+        EquatableArray<ContainingTypeModel> ContainingTypes,
+        string ClassName,
+        bool IsValueType,
+        EquatableArray<DelegateGroupModel> Groups);
 }
