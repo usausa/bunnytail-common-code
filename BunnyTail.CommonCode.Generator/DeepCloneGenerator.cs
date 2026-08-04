@@ -45,14 +45,14 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
             static (spc, type) => Execute(spc, type));
     }
 
-    private static Result<DeepCloneTypeModel> GetTypeModel(GeneratorAttributeSyntaxContext context)
+    private static Result<TypeModel> GetTypeModel(GeneratorAttributeSyntaxContext context)
     {
         var syntax = (TypeDeclarationSyntax)context.TargetNode;
         var symbol = (INamedTypeSymbol)context.TargetSymbol;
 
         if (!syntax.Modifiers.Any(static x => x.IsKind(SyntaxKind.PartialKeyword)))
         {
-            return Results.Error<DeepCloneTypeModel>(new DiagnosticInfo(Diagnostics.DeepCloneInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
+            return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.DeepCloneInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
         // Check whether IDeepCloneable<T> is implemented
@@ -60,7 +60,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
             x.IsGenericType && x.ConstructedFrom.ToDisplayString() == IDeepCloneableName);
         if (!implementsDeepCloneable)
         {
-            return Results.Error<DeepCloneTypeModel>(new DiagnosticInfo(Diagnostics.DeepCloneNotImplementIDeepCloneable, syntax.Identifier.GetLocation(), symbol.Name));
+            return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.DeepCloneNotImplementIDeepCloneable, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
         var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name) ? string.Empty : symbol.ContainingNamespace.ToDisplayString();
@@ -75,7 +75,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         }
         containingTypes?.Reverse();
 
-        var properties = new List<ClonePropertyModel>();
+        var properties = new List<PropertyModel>();
         var diagnostics = new List<DiagnosticInfo>();
         foreach (var member in symbol.GetMembers().OfType<IPropertySymbol>())
         {
@@ -109,24 +109,24 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
                 cloneStrategy = CloneStrategy.Shallow;
             }
 
-            properties.Add(new ClonePropertyModel(
+            properties.Add(new PropertyModel(
                 member.Name,
-                member.Type.ToDisplayString(),
+                member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 cloneStrategy,
                 member.Type.IsReferenceType,
                 member.SetMethod.IsInitOnly));
         }
 
-        var model = new DeepCloneTypeModel(
+        var model = new TypeModel(
             ns,
             new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
             symbol.GetClassName(),
             symbol.IsValueType,
-            new EquatableArray<ClonePropertyModel>(properties.ToArray()));
+            new EquatableArray<PropertyModel>(properties.ToArray()));
 
         return diagnostics.Count == 0
             ? Results.Success(model)
-            : new Result<DeepCloneTypeModel>(model, new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
+            : new Result<TypeModel>(model, new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
     }
 
     private static CloneStrategy GetCloneStrategy(ITypeSymbol typeSymbol)
@@ -162,7 +162,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
     // Execute
     // ------------------------------------------------------------
 
-    private static void ReportDiagnostics(SourceProductionContext context, ImmutableArray<Result<DeepCloneTypeModel>> types)
+    private static void ReportDiagnostics(SourceProductionContext context, ImmutableArray<Result<TypeModel>> types)
     {
         foreach (var info in types.SelectError())
         {
@@ -170,7 +170,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         }
     }
 
-    private static void Execute(SourceProductionContext context, DeepCloneTypeModel type)
+    private static void Execute(SourceProductionContext context, TypeModel type)
     {
         context.CancellationToken.ThrowIfCancellationRequested();
 
@@ -181,7 +181,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         context.AddSource(filename, SourceText.From(builder.ToString(), Encoding.UTF8));
     }
 
-    private static void BuildSource(SourceBuilder builder, DeepCloneTypeModel type)
+    private static void BuildSource(SourceBuilder builder, TypeModel type)
     {
         var containingTypes = type.ContainingTypes;
         var properties = type.Properties;
@@ -280,7 +280,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         }
     }
 
-    private static void BuildCloneExpression(SourceBuilder builder, ClonePropertyModel prop)
+    private static void BuildCloneExpression(SourceBuilder builder, PropertyModel prop)
     {
         switch (prop.Strategy)
         {
@@ -303,7 +303,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
                     builder
                         .Append("this.").Append(prop.Name)
                         .Append(" is null ? null! : (")
-                        .Append(prop.TypeDisplayName)
+                        .Append(prop.TypeName)
                         .Append(")((global::System.Array)this.")
                         .Append(prop.Name)
                         .Append(").Clone()");
@@ -312,7 +312,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
                 {
                     builder
                         .Append("(")
-                        .Append(prop.TypeDisplayName)
+                        .Append(prop.TypeName)
                         .Append(")((global::System.Array)this.")
                         .Append(prop.Name)
                         .Append(").Clone()");
@@ -325,13 +325,13 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
                     builder
                         .Append("this.").Append(prop.Name)
                         .Append(" is null ? null! : new ")
-                        .Append(prop.TypeDisplayName)
+                        .Append(prop.TypeName)
                         .Append("(this.").Append(prop.Name).Append(")");
                 }
                 else
                 {
                     builder
-                        .Append("new ").Append(prop.TypeDisplayName)
+                        .Append("new ").Append(prop.TypeName)
                         .Append("(this.").Append(prop.Name).Append(")");
                 }
                 break;
@@ -386,17 +386,17 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         string ClassName,
         bool IsValueType);
 
-    private sealed record ClonePropertyModel(
+    private sealed record PropertyModel(
         string Name,
-        string TypeDisplayName,
+        string TypeName,
         CloneStrategy Strategy,
         bool IsReferenceType,
         bool RequiresInit);
 
-    private sealed record DeepCloneTypeModel(
+    private sealed record TypeModel(
         string Namespace,
         EquatableArray<ContainingTypeModel> ContainingTypes,
         string ClassName,
         bool IsValueType,
-        EquatableArray<ClonePropertyModel> Properties);
+        EquatableArray<PropertyModel> Properties);
 }

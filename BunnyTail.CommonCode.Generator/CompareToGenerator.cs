@@ -41,14 +41,14 @@ public sealed class CompareToGenerator : IIncrementalGenerator
             static (spc, type) => Execute(spc, type));
     }
 
-    private static Result<CompareToTypeModel> GetTypeModel(GeneratorAttributeSyntaxContext context)
+    private static Result<TypeModel> GetTypeModel(GeneratorAttributeSyntaxContext context)
     {
         var syntax = (TypeDeclarationSyntax)context.TargetNode;
         var symbol = (INamedTypeSymbol)context.TargetSymbol;
 
         if (!syntax.Modifiers.Any(static x => x.IsKind(SyntaxKind.PartialKeyword)))
         {
-            return Results.Error<CompareToTypeModel>(new DiagnosticInfo(Diagnostics.CompareToInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
+            return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.CompareToInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
         var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name) ? string.Empty : symbol.ContainingNamespace.ToDisplayString();
@@ -64,7 +64,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         containingTypes?.Reverse();
 
         var attributes = symbol.GetAttributes().First(static x => x.AttributeClass?.ToDisplayString() == GenerateAttributeName);
-        var generateOperators = GetBoolArg(attributes, nameof(CompareToTypeModel.GenerateOperators)) ?? true;
+        var generateOperators = GetBoolArg(attributes, nameof(TypeModel.GenerateOperators)) ?? true;
 
         var keys = new List<(int Order, string Name, string TypeName)>();
         // ReSharper disable once LoopCanBeConvertedToQuery
@@ -88,18 +88,18 @@ public sealed class CompareToGenerator : IIncrementalGenerator
 
         if (keys.Count == 0)
         {
-            return Results.Error<CompareToTypeModel>(new DiagnosticInfo(Diagnostics.CompareToNoKeys, syntax.Identifier.GetLocation(), symbol.Name));
+            return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.CompareToNoKeys, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
         keys.Sort(static (a, b) => a.Order.CompareTo(b.Order));
 
-        return Results.Success(new CompareToTypeModel(
+        return Results.Success(new TypeModel(
             ns,
             new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
             symbol.GetClassName(),
             symbol.IsValueType,
             generateOperators,
-            new EquatableArray<CompareKeyModel>(keys.Select(static k => new CompareKeyModel(k.Name, k.TypeName)).ToArray())));
+            new EquatableArray<KeyModel>(keys.Select(static k => new KeyModel(k.Name, k.TypeName)).ToArray())));
     }
 
     private static bool? GetBoolArg(AttributeData attr, string name)
@@ -138,7 +138,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
     // Execute
     // ------------------------------------------------------------
 
-    private static void ReportDiagnostics(SourceProductionContext context, ImmutableArray<Result<CompareToTypeModel>> types)
+    private static void ReportDiagnostics(SourceProductionContext context, ImmutableArray<Result<TypeModel>> types)
     {
         foreach (var info in types.SelectError())
         {
@@ -146,7 +146,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         }
     }
 
-    private static void Execute(SourceProductionContext context, CompareToTypeModel type)
+    private static void Execute(SourceProductionContext context, TypeModel type)
     {
         context.CancellationToken.ThrowIfCancellationRequested();
 
@@ -157,7 +157,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         context.AddSource(filename, SourceText.From(builder.ToString(), Encoding.UTF8));
     }
 
-    private static void BuildSource(SourceBuilder builder, CompareToTypeModel type)
+    private static void BuildSource(SourceBuilder builder, TypeModel type)
     {
         var containingTypes = type.ContainingTypes;
         var keys = type.Keys;
@@ -303,15 +303,15 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         string ClassName,
         bool IsValueType);
 
-    private sealed record CompareKeyModel(
+    private sealed record KeyModel(
         string Name,
         string TypeName);
 
-    private sealed record CompareToTypeModel(
+    private sealed record TypeModel(
         string Namespace,
         EquatableArray<ContainingTypeModel> ContainingTypes,
         string ClassName,
         bool IsValueType,
         bool GenerateOperators,
-        EquatableArray<CompareKeyModel> Keys);
+        EquatableArray<KeyModel> Keys);
 }

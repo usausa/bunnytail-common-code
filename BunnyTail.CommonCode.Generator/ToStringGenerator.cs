@@ -211,10 +211,10 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             ns,
             new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
             symbol.GetClassName(),
+            symbol.IsValueType,
             symbol.Name,
             MakeFullName(symbol, ns),
             new EquatableArray<string>(symbol.TypeParameters.Select(static x => x.Name).ToArray()),
-            symbol.IsValueType,
             new EquatableArray<MemberModel>(CollectMembers(symbol).ToArray())));
     }
 
@@ -1248,9 +1248,9 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         string Namespace,
         EquatableArray<ContainingTypeModel> ContainingTypes,
         string ClassName,
+        bool IsValueType,
         string SimpleName,
         string FullName,
         EquatableArray<string> TypeParameters,
-        bool IsValueType,
         EquatableArray<MemberModel> Members);
 }

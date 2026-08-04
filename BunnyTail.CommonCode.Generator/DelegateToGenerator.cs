@@ -41,14 +41,14 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
             static (spc, type) => Execute(spc, type));
     }
 
-    private static Result<DelegateToTypeModel> GetTypeModel(GeneratorAttributeSyntaxContext context)
+    private static Result<TypeModel> GetTypeModel(GeneratorAttributeSyntaxContext context)
     {
         var syntax = (TypeDeclarationSyntax)context.TargetNode;
         var symbol = (INamedTypeSymbol)context.TargetSymbol;
 
         if (!syntax.Modifiers.Any(static x => x.IsKind(SyntaxKind.PartialKeyword)))
         {
-            return Results.Error<DelegateToTypeModel>(new DiagnosticInfo(Diagnostics.DelegateToInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
+            return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.DelegateToInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
         var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name) ? string.Empty : symbol.ContainingNamespace.ToDisplayString();
@@ -63,7 +63,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         }
         containingTypes?.Reverse();
 
-        var delegateGroups = new List<DelegateGroupModel>();
+        var delegateGroups = new List<GroupModel>();
         var diagnostics = new List<DiagnosticInfo>();
 
         // Collect members the class already implements (hand-written implementations are skipped)
@@ -151,7 +151,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var methods = new List<DelegateMethodModel>();
+            var methods = new List<MethodModel>();
             var seenSignatures = new HashSet<string>(StringComparer.Ordinal);
 
             foreach (var iface in interfaces)
@@ -176,12 +176,12 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                             continue;
                         }
 
-                        var parameters = method.Parameters.Select(x => new ParameterModel(x.Type.ToDisplayString(), x.Name, x.RefKind)).ToArray();
+                        var parameters = method.Parameters.Select(x => new ParameterModel(x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), x.Name, x.RefKind)).ToArray();
                         var typeParams = method.TypeParameters.Select(x => x.Name).ToArray();
 
-                        methods.Add(new DelegateMethodModel(
+                        methods.Add(new MethodModel(
                             method.Name,
-                            method.ReturnType.ToDisplayString(),
+                            method.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                             method.ReturnType.SpecialType == SpecialType.System_Void,
                             new EquatableArray<ParameterModel>(parameters),
                             new EquatableArray<string>(typeParams)));
@@ -199,9 +199,9 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                             continue;
                         }
 
-                        methods.Add(new DelegateMethodModel(
+                        methods.Add(new MethodModel(
                             propMember.Name,
-                            propMember.Type.ToDisplayString(),
+                            propMember.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                             false,
                             new EquatableArray<ParameterModel>([]),
                             new EquatableArray<string>([]),
@@ -214,7 +214,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
 
             if (methods.Count > 0)
             {
-                delegateGroups.Add(new DelegateGroupModel(memberName, new EquatableArray<DelegateMethodModel>(methods.ToArray())));
+                delegateGroups.Add(new GroupModel(memberName, new EquatableArray<MethodModel>(methods.ToArray())));
             }
         }
 
@@ -225,19 +225,19 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                 diagnostics.Add(new DiagnosticInfo(Diagnostics.DelegateToNoDelegateField, syntax.Identifier.GetLocation(), symbol.Name));
             }
 
-            return new Result<DelegateToTypeModel>(default!, new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
+            return new Result<TypeModel>(default!, new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
         }
 
-        var model = new DelegateToTypeModel(
+        var model = new TypeModel(
             ns,
             new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
             symbol.GetClassName(),
             symbol.IsValueType,
-            new EquatableArray<DelegateGroupModel>(delegateGroups.ToArray()));
+            new EquatableArray<GroupModel>(delegateGroups.ToArray()));
 
         return diagnostics.Count == 0
             ? Results.Success(model)
-            : new Result<DelegateToTypeModel>(model, new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
+            : new Result<TypeModel>(model, new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
     }
 
     private static INamedTypeSymbol? GetInterfaceTypeArg(AttributeData attr)
@@ -301,7 +301,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
     // Execute
     // ------------------------------------------------------------
 
-    private static void ReportDiagnostics(SourceProductionContext context, ImmutableArray<Result<DelegateToTypeModel>> types)
+    private static void ReportDiagnostics(SourceProductionContext context, ImmutableArray<Result<TypeModel>> types)
     {
         foreach (var info in types.SelectError())
         {
@@ -309,7 +309,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         }
     }
 
-    private static void Execute(SourceProductionContext context, DelegateToTypeModel type)
+    private static void Execute(SourceProductionContext context, TypeModel type)
     {
         context.CancellationToken.ThrowIfCancellationRequested();
 
@@ -320,7 +320,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         context.AddSource(filename, SourceText.From(builder.ToString(), Encoding.UTF8));
     }
 
-    private static void BuildSource(SourceBuilder builder, DelegateToTypeModel type)
+    private static void BuildSource(SourceBuilder builder, TypeModel type)
     {
         var containingTypes = type.ContainingTypes;
 
@@ -516,7 +516,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         string Name,
         RefKind RefKind);
 
-    private sealed record DelegateMethodModel(
+    private sealed record MethodModel(
         string Name,
         string ReturnType,
         bool IsVoid,
@@ -526,14 +526,14 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         bool HasGetter = false,
         bool HasSetter = false);
 
-    private sealed record DelegateGroupModel(
+    private sealed record GroupModel(
         string MemberName,
-        EquatableArray<DelegateMethodModel> Methods);
+        EquatableArray<MethodModel> Methods);
 
-    private sealed record DelegateToTypeModel(
+    private sealed record TypeModel(
         string Namespace,
         EquatableArray<ContainingTypeModel> ContainingTypes,
         string ClassName,
         bool IsValueType,
-        EquatableArray<DelegateGroupModel> Groups);
+        EquatableArray<GroupModel> Groups);
 }

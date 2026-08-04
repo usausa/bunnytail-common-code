@@ -41,14 +41,14 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             static (spc, type) => Execute(spc, type));
     }
 
-    private static Result<EqualityTypeModel> GetTypeModel(GeneratorAttributeSyntaxContext context)
+    private static Result<TypeModel> GetTypeModel(GeneratorAttributeSyntaxContext context)
     {
         var syntax = (TypeDeclarationSyntax)context.TargetNode;
         var symbol = (INamedTypeSymbol)context.TargetSymbol;
 
         if (!syntax.Modifiers.Any(static x => x.IsKind(SyntaxKind.PartialKeyword)))
         {
-            return Results.Error<EqualityTypeModel>(new DiagnosticInfo(Diagnostics.EqualityInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
+            return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.EqualityInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
         var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name) ? string.Empty : symbol.ContainingNamespace.ToDisplayString();
@@ -65,11 +65,11 @@ public sealed class EqualityGenerator : IIncrementalGenerator
 
         var attr = symbol.GetAttributes().First(static x => x.AttributeClass?.ToDisplayString() == GenerateAttributeName);
 
-        var generateOperators = GetBoolArg(attr, nameof(EqualityTypeModel.GenerateOperators)) ?? true;
-        var deepCollectionEquality = GetBoolArg(attr, nameof(EqualityTypeModel.DeepCollectionEquality)) ?? false;
+        var generateOperators = GetBoolArg(attr, nameof(TypeModel.GenerateOperators)) ?? true;
+        var deepCollectionEquality = GetBoolArg(attr, nameof(TypeModel.DeepCollectionEquality)) ?? false;
 
         // For equality / hash, collect reachable public properties walking up to base types (flat spec)
-        var properties = new List<EqualityPropertyModel>();
+        var properties = new List<PropertyModel>();
         var seenNames = new HashSet<string>(StringComparer.Ordinal);
         var currentSymbol = symbol;
         while (currentSymbol is not null)
@@ -99,7 +99,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
                 }
 
                 var isCollection = IsCollectionType(member.Type);
-                properties.Add(new EqualityPropertyModel(
+                properties.Add(new PropertyModel(
                     member.Name,
                     isCollection,
                     member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
@@ -109,10 +109,10 @@ public sealed class EqualityGenerator : IIncrementalGenerator
 
         if (properties.Count == 0)
         {
-            return Results.Error<EqualityTypeModel>(new DiagnosticInfo(Diagnostics.EqualityNoProperties, syntax.Identifier.GetLocation(), symbol.Name));
+            return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.EqualityNoProperties, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
-        return Results.Success(new EqualityTypeModel(
+        return Results.Success(new TypeModel(
             ns,
             new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
             symbol.GetClassName(),
@@ -120,7 +120,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             symbol.IsSealed,
             generateOperators,
             deepCollectionEquality,
-            new EquatableArray<EqualityPropertyModel>(properties.ToArray())));
+            new EquatableArray<PropertyModel>(properties.ToArray())));
     }
 
     private static bool? GetBoolArg(AttributeData attr, string name)
@@ -172,7 +172,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
     // Execute
     // ------------------------------------------------------------
 
-    private static void ReportDiagnostics(SourceProductionContext context, ImmutableArray<Result<EqualityTypeModel>> types)
+    private static void ReportDiagnostics(SourceProductionContext context, ImmutableArray<Result<TypeModel>> types)
     {
         foreach (var info in types.SelectError())
         {
@@ -180,7 +180,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         }
     }
 
-    private static void Execute(SourceProductionContext context, EqualityTypeModel type)
+    private static void Execute(SourceProductionContext context, TypeModel type)
     {
         context.CancellationToken.ThrowIfCancellationRequested();
 
@@ -191,7 +191,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         context.AddSource(filename, SourceText.From(builder.ToString(), Encoding.UTF8));
     }
 
-    private static void BuildSource(SourceBuilder builder, EqualityTypeModel type)
+    private static void BuildSource(SourceBuilder builder, TypeModel type)
     {
         var containingTypes = type.ContainingTypes;
         var properties = type.Properties;
@@ -441,12 +441,12 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         string ClassName,
         bool IsValueType);
 
-    private sealed record EqualityPropertyModel(
+    private sealed record PropertyModel(
         string Name,
         bool IsCollection,
         string TypeName);
 
-    private sealed record EqualityTypeModel(
+    private sealed record TypeModel(
         string Namespace,
         EquatableArray<ContainingTypeModel> ContainingTypes,
         string ClassName,
@@ -454,5 +454,5 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         bool IsSealed,
         bool GenerateOperators,
         bool DeepCollectionEquality,
-        EquatableArray<EqualityPropertyModel> Properties);
+        EquatableArray<PropertyModel> Properties);
 }
