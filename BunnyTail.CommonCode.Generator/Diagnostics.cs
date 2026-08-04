@@ -74,7 +74,7 @@ internal static class Diagnostics
     public static DiagnosticDescriptor DeepClonePropertyMissingDeepClone { get; } = new(
         id: "BTCC0303",
         title: "Property type does not support deep clone",
-        messageFormat: "Property type does not implement IDeepCloneable<T>. Use [IgnoreClone] to suppress this warning. property=[{0}], type=[{1}]",
+        messageFormat: "Property type does not implement IDeepCloneable<T>. Use [ShallowClone] to suppress this warning. property=[{0}], type=[{1}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);

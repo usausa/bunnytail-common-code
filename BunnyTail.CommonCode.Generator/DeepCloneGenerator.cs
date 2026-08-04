@@ -17,7 +17,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
     // ReSharper disable InconsistentNaming
     private const string GenerateAttributeName = "BunnyTail.CommonCode.GenerateDeepCloneAttribute";
     private const string ShallowCloneAttributeName = "BunnyTail.CommonCode.ShallowCloneAttribute";
-    private const string CloneIgnoreAttributeName = "BunnyTail.CommonCode.IgnoreCloneAttribute";
+    private const string IgnoreCloneAttributeName = "BunnyTail.CommonCode.IgnoreCloneAttribute";
     private const string IDeepCloneableName = "BunnyTail.CommonCode.IDeepCloneable<T>";
     // ReSharper restore InconsistentNaming
 
@@ -90,7 +90,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
                 continue;
             }
 
-            if (member.GetAttributes().Any(static x => x.AttributeClass?.ToDisplayString() == CloneIgnoreAttributeName))
+            if (member.GetAttributes().Any(static x => x.AttributeClass?.ToDisplayString() == IgnoreCloneAttributeName))
             {
                 continue;
             }

@@ -311,7 +311,7 @@ public partial class DocumentData : IDeepCloneable<DocumentData>
     [ShallowClone]   // copy reference as-is
     public object? ExtraRef { get; set; }
 
-    [CloneIgnore]    // omit from clone entirely
+    [IgnoreClone]    // omit from clone entirely
     public int CacheKey { get; set; }
 }
 
