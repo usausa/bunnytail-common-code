@@ -16,7 +16,7 @@ Add reference to BunnyTail.CommonCode to csproj.
 
 ## ToString
 
-Generates a `ToString()` implementation. Collections are expanded and `null` is written as a literal so that the output is useful for logging. The format is configured per project with MSBuild properties, and `Style` set to `Record` switches the output to be identical to the one the compiler generates for a `record`.
+Generates a `ToString()` implementation. Collections are expanded and `null` is written as a literal so that the output is useful for logging. Every part of the format is configured per project with MSBuild properties, and the output can also be made identical to the one the compiler generates for a `record`.
 
 ### Source
 
@@ -49,38 +49,51 @@ For a generic type the runtime type arguments are written, so `Data<T>` produces
 
 ### Project settings
 
-The format is configured with MSBuild properties named `CommonCodeGeneratorToString` + the option name. `Style` selects a preset and the individual properties override it.
+The format is configured with MSBuild properties named `CommonCodeGeneratorToString` + the option name.
 
 ```xml
 <PropertyGroup>
-  <CommonCodeGeneratorToStringStyle>Record</CommonCodeGeneratorToStringStyle>
   <CommonCodeGeneratorToStringBracket>Parenthesis</CommonCodeGeneratorToStringBracket>
   <CommonCodeGeneratorToStringCollectionLimit>10</CommonCodeGeneratorToStringCollectionLimit>
 </PropertyGroup>
 ```
 
-| Option | Values | `Default` preset | `Record` preset |
-|---|---|---|---|
-| `Style` | `Default` / `Record` | — | — |
-| `TypeName` | `None` / `Simple` / `Full` | `Simple` | `Simple` |
-| `TypeArgument` | `None` / `Include` | `Include` | `None` |
-| `Null` | `Empty` / `Literal` | `Literal` | `Empty` |
-| `NullLiteral` | any string | `null` | `null` |
-| `Collection` | `Raw` / `Expand` | `Expand` | `Raw` |
-| `CollectionLimit` | `-1` = unlimited, the rest becomes `...` | `-1` | `-1` |
-| `Members` | `Property` / `PropertyAndField` | `Property` | `PropertyAndField` |
-| `Bracket` | `None` / `Brace` / `Parenthesis` / `Square` / `Angle` | `Brace` | `Brace` |
-| `OpenBracket` / `CloseBracket` | any string, takes precedence over `Bracket` | — | — |
-| `InnerSpace` | `None` / `Space` | `Space` | `Space` |
-| `TypeNameSpace` | `None` / `Space` | `Space` | `Space` |
-| `Separator` | any string | `", "` | `", "` |
-| `Assign` | any string | `" = "` | `" = "` |
-| `CollectionBracket` | same as `Bracket` | `Square` | `Square` |
-| `CollectionOpenBracket` / `CollectionCloseBracket` | any string | — | — |
-| `CollectionInnerSpace` | `None` / `Space` | `None` | `None` |
-| `CollectionSeparator` | any string | `", "` | `", "` |
+| Option | Values | Default |
+|---|---|---|
+| `TypeName` | `None` / `Simple` / `Full` | `Simple` |
+| `TypeArgument` | `None` / `Include` | `Include` |
+| `Null` | `Empty` / `Literal` | `Literal` |
+| `NullLiteral` | any string | `null` |
+| `Collection` | `Raw` / `Expand` | `Expand` |
+| `CollectionLimit` | `-1` = unlimited, the rest becomes `...` | `-1` |
+| `Members` | `Property` / `PropertyAndField` | `Property` |
+| `Bracket` | `None` / `Brace` / `Parenthesis` / `Square` / `Angle` | `Brace` |
+| `OpenBracket` / `CloseBracket` | any string, takes precedence over `Bracket` | — |
+| `InnerSpace` | `None` / `Space` | `Space` |
+| `TypeNameSpace` | `None` / `Space` | `Space` |
+| `Separator` | any string | `", "` |
+| `Assign` | any string | `" = "` |
+| `CollectionBracket` | same as `Bracket` | `Square` |
+| `CollectionOpenBracket` / `CollectionCloseBracket` | any string | — |
+| `CollectionInnerSpace` | `None` / `Space` | `None` |
+| `CollectionSeparator` | any string | `", "` |
 
-An unset property inherits the value from the preset. The rules that are not part of a preset are always applied: base type members come first, static members and indexers are excluded, and the inner space is collapsed when there is no member to write.
+The rules that are not configurable are always applied: base type members come first, static members and indexers are excluded, and the inner space is collapsed when there is no member to write.
+
+### Record compatible output
+
+Four options differ from the `record` output. Setting all of them makes `ToString()` produce exactly the same text as the compiler generated one.
+
+```xml
+<PropertyGroup>
+  <CommonCodeGeneratorToStringTypeArgument>None</CommonCodeGeneratorToStringTypeArgument>
+  <CommonCodeGeneratorToStringNull>Empty</CommonCodeGeneratorToStringNull>
+  <CommonCodeGeneratorToStringCollection>Raw</CommonCodeGeneratorToStringCollection>
+  <CommonCodeGeneratorToStringMembers>PropertyAndField</CommonCodeGeneratorToStringMembers>
+</PropertyGroup>
+```
+
+The only intentional difference is a member hidden with `new`, which a `record` writes twice.
 
 MSBuild trims the surrounding whitespace of a property value, so wrap a string value in double quotes to keep it. The outer quotes are removed and the rest is used as is.
 

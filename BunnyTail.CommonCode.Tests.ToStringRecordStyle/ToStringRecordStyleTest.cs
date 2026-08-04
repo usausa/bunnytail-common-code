@@ -1,6 +1,6 @@
 namespace BunnyTail.CommonCode;
 
-// CommonCodeGeneratorToStringStyle is set to Record for this project
+// This project is configured to produce the same output as a record, see the csproj for the settings
 
 public record RecordEquivalent
 {

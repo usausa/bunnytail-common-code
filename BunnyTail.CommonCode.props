@@ -1,7 +1,6 @@
 <Project>
 
   <ItemGroup>
-    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringStyle" />
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringTypeName" />
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringTypeArgument" />
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringNull" />

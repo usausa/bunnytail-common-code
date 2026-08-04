@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -18,7 +18,10 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <CommonCodeGeneratorToStringStyle>Record</CommonCodeGeneratorToStringStyle>
+    <CommonCodeGeneratorToStringTypeArgument>None</CommonCodeGeneratorToStringTypeArgument>
+    <CommonCodeGeneratorToStringNull>Empty</CommonCodeGeneratorToStringNull>
+    <CommonCodeGeneratorToStringCollection>Raw</CommonCodeGeneratorToStringCollection>
+    <CommonCodeGeneratorToStringMembers>PropertyAndField</CommonCodeGeneratorToStringMembers>
   </PropertyGroup>
 
   <Import Project="..\BunnyTail.CommonCode.props" />
