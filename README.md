@@ -2,21 +2,11 @@
 
 [![NuGet](https://img.shields.io/nuget/v/BunnyTail.CommonCode.svg)](https://www.nuget.org/packages/BunnyTail.CommonCode)
 
-## Reference
-
-Add reference to BunnyTail.CommonCode to csproj.
-
-```xml
-  <ItemGroup>
-    <PackageReference Include="BunnyTail.CommonCode" Version="1.2.0" />
-  </ItemGroup>
-```
-
 ---
 
 ## ToString
 
-Generates a `ToString()` implementation. Collections are expanded and `null` is written as a literal so that the output is useful for logging. Every part of the format is configured per project with MSBuild properties, and the output can also be made identical to the one the compiler generates for a `record`.
+Generates a `ToString()` implementation. The format is configured per project with MSBuild properties.
 
 ### Source
 
@@ -43,9 +33,9 @@ var str = data.ToString();
 Assert.Equal("Data { Id = 123, Name = null, Values = [1, 2] }", str);
 ```
 
-Public properties are written, static members and indexers are excluded, and members declared in base types come first. A member hidden with `new` is written only once, using the most derived declaration.
+Public properties are written, static members and indexers are excluded, and base type members come first. A member hidden with `new` is written once.
 
-For a generic type the runtime type arguments are written, so `Data<T>` produces `Data<int> { ... }`. The name is built once per closed generic type and cached in a `static readonly` field, so `ToString()` itself pays no cost.
+For a generic type the runtime type arguments are written, so `Data<T>` produces `Data<int> { ... }`.
 
 ### Project settings
 
@@ -78,11 +68,9 @@ The format is configured with MSBuild properties named `CommonCodeGeneratorToStr
 | `CollectionInnerSpace` | `None` / `Space` | `None` |
 | `CollectionSeparator` | any string | `", "` |
 
-The rules that are not configurable are always applied: base type members come first, static members and indexers are excluded, and the inner space is collapsed when there is no member to write.
-
 ### Record compatible output
 
-Four options differ from the `record` output. Setting all of them makes `ToString()` produce exactly the same text as the compiler generated one.
+Setting these four options produces the same text as a `record`.
 
 ```xml
 <PropertyGroup>
@@ -93,9 +81,9 @@ Four options differ from the `record` output. Setting all of them makes `ToStrin
 </PropertyGroup>
 ```
 
-The only intentional difference is a member hidden with `new`, which a `record` writes twice.
+A member hidden with `new` is the only difference, which a `record` writes twice.
 
-MSBuild trims the surrounding whitespace of a property value, so wrap a string value in double quotes to keep it. The outer quotes are removed and the rest is used as is.
+Wrap a string value in double quotes to keep surrounding whitespace, which MSBuild otherwise trims.
 
 ```xml
 <PropertyGroup>
@@ -109,7 +97,7 @@ MSBuild trims the surrounding whitespace of a property value, so wrap a string v
 [TypeName][TypeNameSpace][OpenBracket][InnerSpace][Name][Assign][Value][Separator]...[InnerSpace][CloseBracket]
 ```
 
-When there is no member to write, the two inner spaces are collapsed into one, so `Data { }` is produced instead of `Data {  }`.
+With no member to write, the two inner spaces are collapsed into one, giving `Data { }`.
 
 | Setting | Output |
 |---|---|
@@ -121,7 +109,7 @@ When there is no member to write, the two inner spaces are collapsed into one, s
 | `TypeName = None, Bracket = None` | `Id = 1, Name = x` |
 | `OpenBracket = "<<", CloseBracket = ">>", Separator = " \| ", Assign = ":"` | `Data << Id:1 \| Name:x >>` |
 
-Angle brackets need to be XML escaped in a csproj, for example `<CommonCodeGeneratorToStringOpenBracket>&lt;&lt;</CommonCodeGeneratorToStringOpenBracket>`.
+Angle brackets need XML escaping in a csproj, for example `&lt;&lt;`.
 
 ### Member attributes
 
@@ -171,7 +159,7 @@ public partial class User
 
 #### Masking
 
-`MaskChar` is the simple form: the whole value becomes that character repeated over its length. `MaskPattern` is the pattern form: a leading or trailing run of `#` keeps that many characters of the original value visible, and the part between the two runs is written as is. The pattern is parsed at generation time, so there is no runtime cost.
+`MaskChar` repeats one character over the whole value. In `MaskPattern`, a leading or trailing run of `#` keeps that many original characters and the part between them is written as is.
 
 | Setting | Value | Output |
 |---|---|---|
@@ -182,9 +170,9 @@ public partial class User
 | `MaskPattern = "***##"` | `abcd1234` | `***34` |
 | `MaskPattern = "####****####"` | `4111111111111111` | `4111****1111` |
 
-`MaskChar` preserves the length of the value while `MaskPattern` does not, so use `MaskPattern` when the length itself must not leak. `MaskPattern` wins when both are set.
+`MaskChar` preserves the length of the value, `MaskPattern` does not. `MaskPattern` wins when both are set.
 
-A value not longer than the total kept length is written as the mask text only, so a short value never leaks an original character. A `MaskPattern` without `#` does not stringify the value at all and only the null check remains.
+A value not longer than the kept length is written as the mask text only.
 
 #### Combining the settings
 
@@ -196,9 +184,7 @@ A value not longer than the total kept length is written as the mask text only, 
 | `[ToStringFormat(MaskPattern = "####****####", MaxLength = 8)]` | `4111111111111111` | — | `4111****1111` | `4111****` |
 | `[ToStringFormat("000000", MaxLength = 3)]` | `7` | `000007` | — | `000` |
 
-The masked length is known at generation time, so the truncation costs nothing at runtime.
-
-Collection expansion is an alternative rendering rather than a stage of this pipeline: masking overrides it, so the elements of a masked collection are never written, and `CollectionLimit` plays the role of `MaxLength` inside an expanded collection. A `null` value follows the `Null` setting and is neither masked nor truncated.
+Masking overrides collection expansion, and an expanded collection is limited by `CollectionLimit` instead of `MaxLength`. A `null` value follows the `Null` setting and is neither masked nor truncated.
 
 ### Diagnostics
 
