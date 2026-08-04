@@ -13,6 +13,30 @@ internal static class Diagnostics
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
+    public static DiagnosticDescriptor ToStringFormatOnIgnored { get; } = new(
+        id: "BTCC0102",
+        title: "ToStringFormat on an ignored member",
+        messageFormat: "[ToStringFormat] has no effect because the member is excluded by [IgnoreToString]. member=[{0}]",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    public static DiagnosticDescriptor ToStringMaskConflict { get; } = new(
+        id: "BTCC0103",
+        title: "Conflicting mask settings",
+        messageFormat: "MaskChar has no effect because MaskPattern takes precedence. member=[{0}]",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    public static DiagnosticDescriptor ToStringFormatNoEffect { get; } = new(
+        id: "BTCC0104",
+        title: "ToStringFormat has no effect",
+        messageFormat: "[ToStringFormat] has no effective setting. member=[{0}]",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
     // Equality (02xx)
     public static DiagnosticDescriptor EqualityInvalidTypeDefinition { get; } = new(
         id: "BTCC0201",

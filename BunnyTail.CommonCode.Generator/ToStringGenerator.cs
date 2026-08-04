@@ -207,6 +207,9 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         }
         containingTypes?.Reverse();
 
+        var diagnostics = new List<DiagnosticInfo>();
+        var members = CollectMembers(symbol, diagnostics);
+
         return Results.Success(new TypeModel(
             ns,
             new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
@@ -215,10 +218,11 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             symbol.Name,
             MakeFullName(symbol, ns),
             new EquatableArray<string>(symbol.TypeParameters.Select(static x => x.Name).ToArray()),
-            new EquatableArray<MemberModel>(CollectMembers(symbol).ToArray())));
+            new EquatableArray<MemberModel>(members.ToArray()),
+            new EquatableArray<DiagnosticInfo>(diagnostics.ToArray())));
     }
 
-    private static List<MemberModel> CollectMembers(INamedTypeSymbol symbol)
+    private static List<MemberModel> CollectMembers(INamedTypeSymbol symbol, List<DiagnosticInfo> diagnostics)
     {
         var levels = new List<List<MemberModel>>();
         var seenNames = new HashSet<string>(StringComparer.Ordinal);
@@ -248,15 +252,20 @@ public sealed class ToStringGenerator : IIncrementalGenerator
                         continue;
                     }
 
+                    if (HasIgnore(property))
+                    {
+                        ReportFormatOnIgnored(diagnostics, property);
+                        continue;
+                    }
+
                     if ((property.DeclaredAccessibility != Accessibility.Public) ||
                         (property.GetMethod is null) ||
-                        property.IsWriteOnly ||
-                        HasIgnore(property))
+                        property.IsWriteOnly)
                     {
                         continue;
                     }
 
-                    members.Add(GetMemberModel(property, property.Type, false));
+                    members.Add(GetMemberModel(property, property.Type, false, diagnostics));
                 }
                 else if (member is IFieldSymbol field)
                 {
@@ -272,12 +281,18 @@ public sealed class ToStringGenerator : IIncrementalGenerator
                         continue;
                     }
 
-                    if ((field.DeclaredAccessibility != Accessibility.Public) || HasIgnore(field))
+                    if (HasIgnore(field))
+                    {
+                        ReportFormatOnIgnored(diagnostics, field);
+                        continue;
+                    }
+
+                    if (field.DeclaredAccessibility != Accessibility.Public)
                     {
                         continue;
                     }
 
-                    members.Add(GetMemberModel(field, field.Type, true));
+                    members.Add(GetMemberModel(field, field.Type, true, diagnostics));
                 }
             }
 
@@ -300,7 +315,27 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     private static bool HasIgnore(ISymbol symbol) =>
         symbol.GetAttributes().Any(static x => x.AttributeClass?.ToDisplayString() == IgnoreAttributeName);
 
-    private static MemberModel GetMemberModel(ISymbol symbol, ITypeSymbol type, bool isField)
+    private static AttributeData? GetFormatAttribute(ISymbol symbol) =>
+        symbol.GetAttributes().FirstOrDefault(static x => x.AttributeClass?.ToDisplayString() == FormatAttributeName);
+
+    private static Location? GetSourceLocation(ISymbol symbol) =>
+        symbol.Locations.FirstOrDefault(static x => x.IsInSource);
+
+    private static void ReportFormatOnIgnored(List<DiagnosticInfo> diagnostics, ISymbol symbol)
+    {
+        if (GetFormatAttribute(symbol) is null)
+        {
+            return;
+        }
+
+        var location = GetSourceLocation(symbol);
+        if (location is not null)
+        {
+            diagnostics.Add(new DiagnosticInfo(Diagnostics.ToStringFormatOnIgnored, location, symbol.Name));
+        }
+    }
+
+    private static MemberModel GetMemberModel(ISymbol symbol, ITypeSymbol type, bool isField, List<DiagnosticInfo> diagnostics)
     {
         var (hasElements, isNullAssignable, isElementNullAssignable) = GetMemberType(type);
 
@@ -309,7 +344,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         var maskChar = '\0';
         var maxLength = 0;
 
-        var attr = symbol.GetAttributes().FirstOrDefault(static x => x.AttributeClass?.ToDisplayString() == FormatAttributeName);
+        var attr = GetFormatAttribute(symbol);
         if (attr is not null)
         {
             if ((attr.ConstructorArguments.Length > 0) && (attr.ConstructorArguments[0].Value is string formatValue))
@@ -339,6 +374,19 @@ public sealed class ToStringGenerator : IIncrementalGenerator
                             maskPattern = maskPatternValue;
                         }
                         break;
+                }
+            }
+
+            var location = GetSourceLocation(symbol);
+            if (location is not null)
+            {
+                if ((maskChar != '\0') && !String.IsNullOrEmpty(maskPattern))
+                {
+                    diagnostics.Add(new DiagnosticInfo(Diagnostics.ToStringMaskConflict, location, symbol.Name));
+                }
+                else if (String.IsNullOrEmpty(format) && (maxLength <= 0) && (maskChar == '\0') && String.IsNullOrEmpty(maskPattern))
+                {
+                    diagnostics.Add(new DiagnosticInfo(Diagnostics.ToStringFormatNoEffect, location, symbol.Name));
                 }
             }
         }
@@ -396,6 +444,14 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         foreach (var info in types.SelectError())
         {
             context.ReportDiagnostic(info);
+        }
+
+        foreach (var type in types.SelectValue())
+        {
+            foreach (var info in type.Diagnostics)
+            {
+                context.ReportDiagnostic(info);
+            }
         }
     }
 
@@ -1252,5 +1308,6 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         string SimpleName,
         string FullName,
         EquatableArray<string> TypeParameters,
-        EquatableArray<MemberModel> Members);
+        EquatableArray<MemberModel> Members,
+        EquatableArray<DiagnosticInfo> Diagnostics);
 }

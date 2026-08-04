@@ -176,7 +176,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                             continue;
                         }
 
-                        var parameters = method.Parameters.Select(x => new ParameterModel(x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), x.Name, x.RefKind)).ToArray();
+                        var parameters = method.Parameters.Select(x => new ParameterModel(x.Name, x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), x.RefKind)).ToArray();
                         var typeParams = method.TypeParameters.Select(x => x.Name).ToArray();
 
                         methods.Add(new MethodModel(
@@ -228,16 +228,13 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
             return new Result<TypeModel>(default!, new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
         }
 
-        var model = new TypeModel(
+        return Results.Success(new TypeModel(
             ns,
             new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
             symbol.GetClassName(),
             symbol.IsValueType,
-            new EquatableArray<GroupModel>(delegateGroups.ToArray()));
-
-        return diagnostics.Count == 0
-            ? Results.Success(model)
-            : new Result<TypeModel>(model, new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
+            new EquatableArray<GroupModel>(delegateGroups.ToArray()),
+            new EquatableArray<DiagnosticInfo>(diagnostics.ToArray())));
     }
 
     private static INamedTypeSymbol? GetInterfaceTypeArg(AttributeData attr)
@@ -306,6 +303,14 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         foreach (var info in types.SelectError())
         {
             context.ReportDiagnostic(info);
+        }
+
+        foreach (var type in types.SelectValue())
+        {
+            foreach (var info in type.Diagnostics)
+            {
+                context.ReportDiagnostic(info);
+            }
         }
     }
 
@@ -512,8 +517,8 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         bool IsValueType);
 
     private sealed record ParameterModel(
-        string TypeName,
         string Name,
+        string TypeName,
         RefKind RefKind);
 
     private sealed record MethodModel(
@@ -535,5 +540,6 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         EquatableArray<ContainingTypeModel> ContainingTypes,
         string ClassName,
         bool IsValueType,
-        EquatableArray<GroupModel> Groups);
+        EquatableArray<GroupModel> Groups,
+        EquatableArray<DiagnosticInfo> Diagnostics);
 }

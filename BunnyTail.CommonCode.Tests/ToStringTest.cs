@@ -168,9 +168,6 @@ public partial class ToStringMaskCharData
 
     [ToStringFormat(MaskChar = '.')]
     public string Secret { get; set; } = default!;
-
-    [ToStringFormat(MaskChar = '*', MaskPattern = "***")]
-    public string Both { get; set; } = default!;
 }
 
 #pragma warning disable CA1819
@@ -446,7 +443,7 @@ public class ToStringTest
     public void TestMaskChar()
     {
         // Arrange
-        var masked = new ToStringMaskCharData { Password = "secret", Secret = "abc", Both = "secret" };
+        var masked = new ToStringMaskCharData { Password = "secret", Secret = "abc" };
         var nullValue = new ToStringMaskCharData();
 
         // Act
@@ -454,9 +451,9 @@ public class ToStringTest
         var nullText = nullValue.ToString();
 
         // Assert
-        // MaskChar repeats the character over the whole value, and MaskPattern wins when both are set
-        Assert.Equal("ToStringMaskCharData { Password = ******, Secret = ..., Both = *** }", maskedText);
-        Assert.Equal("ToStringMaskCharData { Password = null, Secret = null, Both = null }", nullText);
+        // MaskChar repeats the character over the whole value
+        Assert.Equal("ToStringMaskCharData { Password = ******, Secret = ... }", maskedText);
+        Assert.Equal("ToStringMaskCharData { Password = null, Secret = null }", nullText);
     }
 
     [Fact]

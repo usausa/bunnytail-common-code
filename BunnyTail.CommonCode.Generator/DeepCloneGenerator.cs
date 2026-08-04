@@ -117,16 +117,13 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
                 member.SetMethod.IsInitOnly));
         }
 
-        var model = new TypeModel(
+        return Results.Success(new TypeModel(
             ns,
             new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
             symbol.GetClassName(),
             symbol.IsValueType,
-            new EquatableArray<PropertyModel>(properties.ToArray()));
-
-        return diagnostics.Count == 0
-            ? Results.Success(model)
-            : new Result<TypeModel>(model, new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
+            new EquatableArray<PropertyModel>(properties.ToArray()),
+            new EquatableArray<DiagnosticInfo>(diagnostics.ToArray())));
     }
 
     private static CloneStrategy GetCloneStrategy(ITypeSymbol typeSymbol)
@@ -167,6 +164,14 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         foreach (var info in types.SelectError())
         {
             context.ReportDiagnostic(info);
+        }
+
+        foreach (var type in types.SelectValue())
+        {
+            foreach (var info in type.Diagnostics)
+            {
+                context.ReportDiagnostic(info);
+            }
         }
     }
 
@@ -398,5 +403,6 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         EquatableArray<ContainingTypeModel> ContainingTypes,
         string ClassName,
         bool IsValueType,
-        EquatableArray<PropertyModel> Properties);
+        EquatableArray<PropertyModel> Properties,
+        EquatableArray<DiagnosticInfo> Diagnostics);
 }

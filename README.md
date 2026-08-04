@@ -68,6 +68,14 @@ The format is configured with MSBuild properties named `CommonCodeGeneratorToStr
 | `CollectionInnerSpace` | `None` / `Space` | `None` |
 | `CollectionSeparator` | any string | `", "` |
 
+Wrap a string value in double quotes to keep surrounding whitespace, which MSBuild otherwise trims. A value containing `;` or `#` cannot be given, because it is read as a comment.
+
+```xml
+<PropertyGroup>
+  <CommonCodeGeneratorToStringSeparator>" | "</CommonCodeGeneratorToStringSeparator>
+</PropertyGroup>
+```
+
 ### Record compatible output
 
 Setting these four options produces the same text as a `record`.
@@ -82,14 +90,6 @@ Setting these four options produces the same text as a `record`.
 ```
 
 A member hidden with `new` is the only difference, which a `record` writes twice.
-
-Wrap a string value in double quotes to keep surrounding whitespace, which MSBuild otherwise trims.
-
-```xml
-<PropertyGroup>
-  <CommonCodeGeneratorToStringSeparator>" | "</CommonCodeGeneratorToStringSeparator>
-</PropertyGroup>
-```
 
 ### Output layout
 
@@ -191,6 +191,9 @@ Masking overrides collection expansion, and an expanded collection is limited by
 | ID | Severity | Description |
 |---|---|---|
 | BTCC0101 | Warning | Type must be partial |
+| BTCC0102 | Warning | `[ToStringFormat]` on a member excluded by `[IgnoreToString]` |
+| BTCC0103 | Warning | `MaskChar` is ignored because `MaskPattern` takes precedence |
+| BTCC0104 | Warning | `[ToStringFormat]` has no effective setting |
 
 ---
 

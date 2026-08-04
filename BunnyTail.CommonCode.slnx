@@ -22,6 +22,7 @@
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="BunnyTail.CommonCode.Tests/BunnyTail.CommonCode.Tests.csproj" />
+    <Project Path="BunnyTail.CommonCode.Tests.ToStringNoBracket/BunnyTail.CommonCode.Tests.ToStringNoBracket.csproj" />
     <Project Path="BunnyTail.CommonCode.Tests.ToStringOptions/BunnyTail.CommonCode.Tests.ToStringOptions.csproj" />
     <Project Path="BunnyTail.CommonCode.Tests.ToStringRecordStyle/BunnyTail.CommonCode.Tests.ToStringRecordStyle.csproj" />
   </Folder>
