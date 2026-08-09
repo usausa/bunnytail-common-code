@@ -113,8 +113,72 @@ internal sealed partial class EqualityEnumerableData
     public List<int> Values { get; init; } = [];
 }
 
+// Set / Dictionary are compared without regard to enumeration order
+[GenerateEquality(DeepCollectionEquality = true)]
+internal sealed partial class EqualityUnorderedData
+{
+    public HashSet<int> Set { get; init; } = [];
+
+    public Dictionary<string, int> Map { get; init; } = [];
+}
+
+// A set element can be null; the unordered comparison and hash must accept it
+[GenerateEquality(DeepCollectionEquality = true)]
+internal sealed partial class EqualityNullableSetData
+{
+    public HashSet<string?> Set { get; init; } = [];
+}
+
 public class EqualityTest
 {
+    [Fact]
+    public void WhenSetHasSameContentsInDifferentOrderThenEquals()
+    {
+        // Arrange
+        var a = new EqualityUnorderedData { Set = [1, 2, 3], Map = new() { ["a"] = 1, ["b"] = 2 } };
+        var b = new EqualityUnorderedData { Set = [3, 2, 1], Map = new() { ["b"] = 2, ["a"] = 1 } };
+
+        // Act & Assert
+        Assert.True(a.Equals(b));
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
+    public void WhenSetContentDiffersThenNotEquals()
+    {
+        // Arrange
+        var a = new EqualityUnorderedData { Set = [1, 2, 3] };
+        var b = new EqualityUnorderedData { Set = [1, 2, 4] };
+
+        // Act & Assert
+        Assert.False(a.Equals(b));
+    }
+
+    [Fact]
+    public void WhenSetContainsNullThenComparedByContent()
+    {
+        // Arrange
+        var a = new EqualityNullableSetData { Set = [null, "a"] };
+        var b = new EqualityNullableSetData { Set = ["a", null] };
+        var c = new EqualityNullableSetData { Set = ["a", "b"] };
+
+        // Act & Assert
+        Assert.True(a.Equals(b));
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+        Assert.False(a.Equals(c));
+    }
+
+    [Fact]
+    public void WhenMapValueDiffersThenNotEquals()
+    {
+        // Arrange
+        var a = new EqualityUnorderedData { Map = new() { ["a"] = 1 } };
+        var b = new EqualityUnorderedData { Map = new() { ["a"] = 2 } };
+
+        // Act & Assert
+        Assert.False(a.Equals(b));
+    }
+
     [Fact]
     public void WhenSameValuesThenEquals()
     {

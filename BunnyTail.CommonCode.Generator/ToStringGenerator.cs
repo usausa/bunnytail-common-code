@@ -64,15 +64,16 @@ public sealed class ToStringGenerator : IIncrementalGenerator
                 GenerateAttributeName,
                 static (node, _) => IsTypeSyntax(node),
                 static (context, _) => GetTypeModel(context))
-            .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : [])
-            .Collect();
+            .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : []);
 
         context.RegisterSourceOutput(
             targetProvider,
-            static (spc, types) => ReportDiagnostics(spc, types));
+            static (spc, result) => ReportDiagnostics(spc, result));
 
         var models = targetProvider
-            .SelectMany(static (types, _) => types.SelectValue().ToImmutableArray())
+            .Where(static x => x.HasValue)
+            .Select(static (x, _) => x.Value)
+            .WithTrackingName("Models")
             .Combine(optionProvider);
         context.RegisterImplementationSourceOutput(
             models,
@@ -439,19 +440,11 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     // Builder
     // ------------------------------------------------------------
 
-    private static void ReportDiagnostics(SourceProductionContext context, ImmutableArray<Result<TypeModel>> types)
+    private static void ReportDiagnostics(SourceProductionContext context, Result<TypeModel> result)
     {
-        foreach (var info in types.SelectError())
+        foreach (var info in result.Diagnostics)
         {
             context.ReportDiagnostic(info);
-        }
-
-        foreach (var type in types.SelectValue())
-        {
-            foreach (var info in type.Diagnostics)
-            {
-                context.ReportDiagnostic(info);
-            }
         }
     }
 

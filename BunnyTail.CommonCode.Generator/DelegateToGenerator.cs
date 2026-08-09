@@ -28,14 +28,20 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                 GenerateAttributeName,
                 static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax,
                 static (ctx, _) => GetTypeModel(ctx))
-            .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : [])
-            .Collect();
+            .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : []);
 
         context.RegisterSourceOutput(
             targetProvider,
-            static (spc, types) => ReportDiagnostics(spc, types));
+            static (spc, result) => ReportDiagnostics(spc, result));
 
-        var models = targetProvider.SelectMany(static (types, _) => types.SelectValue().ToImmutableArray());
+        // Generation flows from the per-type provider instead of a Collect()ed array, so
+        // editing one type invalidates only that type's output, not every type's.
+        // HasValue rather than IsSuccess: identical here (Error carries no value), and it
+        // also exists in SourceGenerateHelper 2.0 where IsSuccess was removed.
+        var models = targetProvider
+            .Where(static x => x.HasValue)
+            .Select(static (x, _) => x.Value)
+            .WithTrackingName("Models");
         context.RegisterImplementationSourceOutput(
             models,
             static (spc, type) => Execute(spc, type));
@@ -298,19 +304,11 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
     // Execute
     // ------------------------------------------------------------
 
-    private static void ReportDiagnostics(SourceProductionContext context, ImmutableArray<Result<TypeModel>> types)
+    private static void ReportDiagnostics(SourceProductionContext context, Result<TypeModel> result)
     {
-        foreach (var info in types.SelectError())
+        foreach (var info in result.Diagnostics)
         {
             context.ReportDiagnostic(info);
-        }
-
-        foreach (var type in types.SelectValue())
-        {
-            foreach (var info in type.Diagnostics)
-            {
-                context.ReportDiagnostic(info);
-            }
         }
     }
 

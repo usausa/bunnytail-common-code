@@ -228,9 +228,11 @@ public sealed partial class TaggedData
 | Property | Default | Description |
 |---|---|---|
 | `GenerateOperators` | `true` | Emit `==` and `!=` operators |
-| `DeepCollectionEquality` | `false` | Use `SequenceEqual` for collection properties |
+| `DeepCollectionEquality` | `false` | Compare collection properties by content instead of by reference |
 
 Equality and hash code are computed from all reachable public properties, including those inherited from base types (flattened). `base.Equals` / `base.GetHashCode` are not called.
+
+When `DeepCollectionEquality` is enabled, ordered collections (arrays, `List<T>`, other `IEnumerable<T>`) are compared in order (`SequenceEqual`), while `ISet<T>` and `IDictionary<TKey, TValue>` are compared without regard to enumeration order, and their hash codes are order-independent.
 
 ### Result
 

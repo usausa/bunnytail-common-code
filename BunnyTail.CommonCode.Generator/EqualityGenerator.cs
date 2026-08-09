@@ -1,7 +1,9 @@
 namespace BunnyTail.CommonCode.Generator;
 
 using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Text;
 
 using Microsoft.CodeAnalysis;
@@ -28,14 +30,20 @@ public sealed class EqualityGenerator : IIncrementalGenerator
                 GenerateAttributeName,
                 static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax,
                 static (ctx, _) => GetTypeModel(ctx))
-            .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : [])
-            .Collect();
+            .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : []);
 
         context.RegisterSourceOutput(
             targetProvider,
-            static (spc, types) => ReportDiagnostics(spc, types));
+            static (spc, result) => ReportDiagnostics(spc, result));
 
-        var models = targetProvider.SelectMany(static (types, _) => types.SelectValue().ToImmutableArray());
+        // Generation flows from the per-type provider instead of a Collect()ed array, so
+        // editing one type invalidates only that type's output, not every type's.
+        // HasValue rather than IsSuccess: identical here (Error carries no value), and it
+        // also exists in SourceGenerateHelper 2.0 where IsSuccess was removed.
+        var models = targetProvider
+            .Where(static x => x.HasValue)
+            .Select(static (x, _) => x.Value)
+            .WithTrackingName("Models");
         context.RegisterImplementationSourceOutput(
             models,
             static (spc, type) => Execute(spc, type));
@@ -76,7 +84,9 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         {
             foreach (var member in currentSymbol.GetMembers().OfType<IPropertySymbol>())
             {
-                // Skip duplicate property names (hides base property)
+                // Properties can not be overloaded, so a name seen at a more-derived level is always
+                // the reachable one (override or `new` hide); the base declaration is skipped. This is
+                // unlike methods, where the same name can carry distinct signatures.
                 if (!seenNames.Add(member.Name))
                 {
                     continue;
@@ -98,10 +108,9 @@ public sealed class EqualityGenerator : IIncrementalGenerator
                     continue;
                 }
 
-                var isCollection = IsCollectionType(member.Type);
                 properties.Add(new PropertyModel(
                     member.Name,
-                    isCollection,
+                    ClassifyCollection(member.Type),
                     member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
             }
             currentSymbol = currentSymbol.BaseType;
@@ -139,42 +148,57 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         return null;
     }
 
-    private static bool IsCollectionType(ITypeSymbol typeSymbol)
+    // Set / Dictionary enumerate in insertion / rehash order, so an ordered SequenceEqual would
+    // report two logically equal instances as different. They are classified as Unordered and
+    // compared without regard to order; arrays and lists stay Sequence.
+    private static CollectionKind ClassifyCollection(ITypeSymbol typeSymbol)
     {
         if (typeSymbol.SpecialType == SpecialType.System_String)
         {
-            return false;
+            return CollectionKind.None;
         }
 
         if (typeSymbol is IArrayTypeSymbol)
         {
-            return true;
+            return CollectionKind.Sequence;
         }
 
-        if (typeSymbol is INamedTypeSymbol { IsGenericType: true } namedType &&
-            (namedType.ConstructedFrom.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>"))
+        var isEnumerable = false;
+        foreach (var type in Self(typeSymbol).Concat(typeSymbol.AllInterfaces))
         {
-            return true;
-        }
-
-        foreach (var iface in typeSymbol.AllInterfaces)
-        {
-            if (iface.IsGenericType && (iface.ConstructedFrom.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>"))
+            if (type is not INamedTypeSymbol { IsGenericType: true } named)
             {
-                return true;
+                continue;
+            }
+
+            switch (named.ConstructedFrom.ToDisplayString())
+            {
+                case "System.Collections.Generic.ISet<T>":
+                case "System.Collections.Generic.IReadOnlySet<T>":
+                case "System.Collections.Generic.IDictionary<TKey, TValue>":
+                case "System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>":
+                    return CollectionKind.Unordered;
+                case "System.Collections.Generic.IEnumerable<T>":
+                    isEnumerable = true;
+                    break;
             }
         }
 
-        return false;
+        return isEnumerable ? CollectionKind.Sequence : CollectionKind.None;
+
+        static IEnumerable<ITypeSymbol> Self(ITypeSymbol symbol)
+        {
+            yield return symbol;
+        }
     }
 
     // ------------------------------------------------------------
     // Execute
     // ------------------------------------------------------------
 
-    private static void ReportDiagnostics(SourceProductionContext context, ImmutableArray<Result<TypeModel>> types)
+    private static void ReportDiagnostics(SourceProductionContext context, Result<TypeModel> result)
     {
-        foreach (var info in types.SelectError())
+        foreach (var info in result.Diagnostics)
         {
             context.ReportDiagnostic(info);
         }
@@ -273,10 +297,10 @@ public sealed class EqualityGenerator : IIncrementalGenerator
                 builder.Indent().Append("    ");
             }
 
-            if (prop.IsCollection && type.DeepCollectionEquality)
+            if (prop.Collection != CollectionKind.None && type.DeepCollectionEquality)
             {
                 builder
-                    .Append("SequenceEqualOrBothNull(this.")
+                    .Append(prop.Collection == CollectionKind.Unordered ? "UnorderedEqualOrBothNull(this." : "SequenceEqualOrBothNull(this.")
                     .Append(prop.Name)
                     .Append(", other.")
                     .Append(prop.Name)
@@ -310,7 +334,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         builder.Indent().Append("var hash = new global::System.HashCode();").NewLine();
         foreach (var prop in properties)
         {
-            if (prop.IsCollection && type.DeepCollectionEquality)
+            if (prop.Collection == CollectionKind.Sequence && type.DeepCollectionEquality)
             {
                 builder.Indent().Append("if (this.").Append(prop.Name).Append(" is not null)").NewLine();
                 builder.BeginScope();
@@ -318,6 +342,13 @@ public sealed class EqualityGenerator : IIncrementalGenerator
                 builder.BeginScope();
                 builder.Indent().Append("hash.Add(item);").NewLine();
                 builder.EndScope();
+                builder.EndScope();
+            }
+            else if (prop.Collection == CollectionKind.Unordered && type.DeepCollectionEquality)
+            {
+                builder.Indent().Append("if (this.").Append(prop.Name).Append(" is not null)").NewLine();
+                builder.BeginScope();
+                builder.Indent().Append("hash.Add(UnorderedHash(this.").Append(prop.Name).Append("));").NewLine();
                 builder.EndScope();
             }
             else
@@ -373,8 +404,8 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             }
         }
 
-        // SequenceEqualOrBothNull helper
-        if (type.DeepCollectionEquality && properties.Any(static x => x.IsCollection))
+        // Comparison helpers
+        if (type.DeepCollectionEquality && properties.Any(static x => x.Collection == CollectionKind.Sequence))
         {
             builder.NewLine();
             builder.Indent()
@@ -398,6 +429,68 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             builder.Indent()
                 .Append("return global::System.Linq.Enumerable.SequenceEqual(a, b);")
                 .NewLine();
+            builder.EndScope();
+        }
+
+        if (type.DeepCollectionEquality && properties.Any(static x => x.Collection == CollectionKind.Unordered))
+        {
+            // Multiset comparison over the enumerated element (T for a set, KeyValuePair<K,V>
+            // for a dictionary), so order and rehash history do not affect the result.
+            builder.NewLine();
+            builder.Indent()
+                .Append("private static bool UnorderedEqualOrBothNull<T>(")
+                .NewLine();
+            builder.Indent()
+                .Append("    global::System.Collections.Generic.IEnumerable<T>? a,")
+                .NewLine();
+            builder.Indent()
+                .Append("    global::System.Collections.Generic.IEnumerable<T>? b)")
+                .NewLine();
+            builder.BeginScope();
+            builder.Indent().Append("if (a is null)").NewLine();
+            builder.BeginScope();
+            builder.Indent().Append("return b is null;").NewLine();
+            builder.EndScope();
+            builder.Indent().Append("if (b is null)").NewLine();
+            builder.BeginScope();
+            builder.Indent().Append("return false;").NewLine();
+            builder.EndScope();
+            // ValueTuple<T> is a struct key delegating to EqualityComparer<T>.Default, which
+            // satisfies the Dictionary notnull constraint and accepts null elements, keeping
+            // the comparison O(n + m) even for large sets.
+            builder.Indent().Append("var counts = new global::System.Collections.Generic.Dictionary<global::System.ValueTuple<T>, int>();").NewLine();
+            builder.Indent().Append("var balance = 0;").NewLine();
+            builder.Indent().Append("foreach (var item in a)").NewLine();
+            builder.BeginScope();
+            builder.Indent().Append("counts.TryGetValue(global::System.ValueTuple.Create(item), out var count);").NewLine();
+            builder.Indent().Append("counts[global::System.ValueTuple.Create(item)] = count + 1;").NewLine();
+            builder.Indent().Append("balance++;").NewLine();
+            builder.EndScope();
+            builder.Indent().Append("foreach (var item in b)").NewLine();
+            builder.BeginScope();
+            builder.Indent().Append("if (!counts.TryGetValue(global::System.ValueTuple.Create(item), out var count) || (count == 0))").NewLine();
+            builder.BeginScope();
+            builder.Indent().Append("return false;").NewLine();
+            builder.EndScope();
+            builder.Indent().Append("counts[global::System.ValueTuple.Create(item)] = count - 1;").NewLine();
+            builder.Indent().Append("balance--;").NewLine();
+            builder.EndScope();
+            builder.Indent().Append("return balance == 0;").NewLine();
+            builder.EndScope();
+
+            // Commutative, unchecked accumulation: equal contents hash equally regardless of
+            // order, and the sum must not throw in projects that compile with checked arithmetic.
+            builder.NewLine();
+            builder.Indent()
+                .Append("private static int UnorderedHash<T>(global::System.Collections.Generic.IEnumerable<T> source)")
+                .NewLine();
+            builder.BeginScope();
+            builder.Indent().Append("var hash = 0;").NewLine();
+            builder.Indent().Append("foreach (var item in source)").NewLine();
+            builder.BeginScope();
+            builder.Indent().Append("hash = unchecked(hash + (item is null ? 0 : global::System.Collections.Generic.EqualityComparer<T>.Default.GetHashCode(item)));").NewLine();
+            builder.EndScope();
+            builder.Indent().Append("return hash;").NewLine();
             builder.EndScope();
         }
 
@@ -441,9 +534,16 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         string ClassName,
         bool IsValueType);
 
+    private enum CollectionKind
+    {
+        None,
+        Sequence,
+        Unordered
+    }
+
     private sealed record PropertyModel(
         string Name,
-        bool IsCollection,
+        CollectionKind Collection,
         string TypeName);
 
     private sealed record TypeModel(
