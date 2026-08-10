@@ -64,14 +64,12 @@ public class EqualityShadowBase
     public int Value { get; init; }
 }
 
-// Even when a derived type hides a base property with new (also changing the type), only the most-derived declaration is compared
 [GenerateEquality]
 public partial class EqualityShadowDerived : EqualityShadowBase
 {
     public new string Value { get; init; } = default!;
 }
 
-// Even for a type with an indexer, the indexer is excluded and only regular properties are compared
 [GenerateEquality]
 public partial class EqualityIndexedData
 {
@@ -91,8 +89,6 @@ public class EqualityHiddenBase
     public string Token { get; init; } = default!;
 }
 
-// The derived type hides the public member with new (different type) marked IgnoreEquality
-// Since this.Token binds to the derived one (int) and cannot reach the base public one (string), Token is excluded (spec: only the reachable most-derived member is targeted)
 [GenerateEquality]
 public partial class EqualityHiddenDerived : EqualityHiddenBase
 {
@@ -102,7 +98,6 @@ public partial class EqualityHiddenDerived : EqualityHiddenBase
     public string Label { get; init; } = default!;
 }
 
-// record struct: generator must not generate any Equals — built-in value equality must be preserved
 [GenerateEquality]
 // ReSharper disable once PartialTypeWithSinglePart
 internal partial record struct RecordStructData(int X);
@@ -113,7 +108,6 @@ internal sealed partial class EqualityEnumerableData
     public List<int> Values { get; init; } = [];
 }
 
-// Set / Dictionary are compared without regard to enumeration order
 [GenerateEquality(DeepCollectionEquality = true)]
 internal sealed partial class EqualityUnorderedData
 {
@@ -122,7 +116,6 @@ internal sealed partial class EqualityUnorderedData
     public Dictionary<string, int> Map { get; init; } = [];
 }
 
-// A set element can be null; the unordered comparison and hash must accept it
 [GenerateEquality(DeepCollectionEquality = true)]
 internal sealed partial class EqualityNullableSetData
 {

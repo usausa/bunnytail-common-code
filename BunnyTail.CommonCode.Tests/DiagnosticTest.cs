@@ -4,13 +4,10 @@ using BunnyTail.CommonCode.Generator;
 
 using Microsoft.CodeAnalysis;
 
-// Diagnostic coverage for the five generators in this project.
-// The other tests exercise generated code at run time and therefore only reach inputs the
-// generators accept; these cover the refusals.
 public class DiagnosticTest
 {
     //-----------------------------------------------------------------------
-    // BTCC0101 / 0201 / 0301 / 0401 / 0501 : the type must be partial
+    // Type
     //-----------------------------------------------------------------------
 
     [Fact]
@@ -116,7 +113,7 @@ public class DiagnosticTest
     }
 
     //-----------------------------------------------------------------------
-    // BTCC0202 : equality target has no property
+    // Equality
     //-----------------------------------------------------------------------
 
     [Fact]
@@ -138,7 +135,7 @@ public class DiagnosticTest
     }
 
     //-----------------------------------------------------------------------
-    // BTCC0402 : no field carries [DelegateTo]
+    // DelegateTo
     //-----------------------------------------------------------------------
 
     [Fact]
@@ -161,7 +158,7 @@ public class DiagnosticTest
     }
 
     //-----------------------------------------------------------------------
-    // BTCC0502 : no property carries [CompareKey]
+    // CompareTo
     //-----------------------------------------------------------------------
 
     [Fact]
@@ -184,7 +181,7 @@ public class DiagnosticTest
     }
 
     //-----------------------------------------------------------------------
-    // Valid input must stay clean
+    // ToString
     //-----------------------------------------------------------------------
 
     [Fact]

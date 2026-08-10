@@ -37,8 +37,6 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
             targetProvider,
             static (spc, result) => ReportDiagnostics(spc, result));
 
-        // Generation flows from the per-type provider instead of a Collect()ed array, so
-        // editing one type invalidates only that type's output, not every type's.
         var models = targetProvider
             .Where(static x => x.HasValue)
             .Select(static (x, _) => x.Value)
@@ -224,7 +222,6 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
 
         builder.Indent().Append("var clone = new ").Append(type.ClassName);
 
-        // init-only properties cannot be assigned after construction, so set them via the object initializer
         var hasInit = false;
         foreach (var prop in properties)
         {

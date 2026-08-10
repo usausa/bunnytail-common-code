@@ -34,8 +34,6 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             targetProvider,
             static (spc, result) => ReportDiagnostics(spc, result));
 
-        // Generation flows from the per-type provider instead of a Collect()ed array, so
-        // editing one type invalidates only that type's output, not every type's.
         var models = targetProvider
             .Where(static x => x.HasValue)
             .Select(static (x, _) => x.Value)
@@ -72,7 +70,6 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         var generateOperators = GetBoolArg(attr, nameof(TypeModel.GenerateOperators)) ?? true;
         var deepCollectionEquality = GetBoolArg(attr, nameof(TypeModel.DeepCollectionEquality)) ?? false;
 
-        // For equality / hash, collect reachable public properties walking up to base types (flat spec)
         var properties = new List<PropertyModel>();
         var seenNames = new HashSet<string>(StringComparer.Ordinal);
         var currentSymbol = symbol;
@@ -80,9 +77,6 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         {
             foreach (var member in currentSymbol.GetMembers().OfType<IPropertySymbol>())
             {
-                // Properties can not be overloaded, so a name seen at a more-derived level is always
-                // the reachable one (override or `new` hide); the base declaration is skipped. This is
-                // unlike methods, where the same name can carry distinct signatures.
                 if (!seenNames.Add(member.Name))
                 {
                     continue;
@@ -144,9 +138,6 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         return null;
     }
 
-    // Set / Dictionary enumerate in insertion / rehash order, so an ordered SequenceEqual would
-    // report two logically equal instances as different. They are classified as Unordered and
-    // compared without regard to order; arrays and lists stay Sequence.
     private static CollectionKind ClassifyCollection(ITypeSymbol typeSymbol)
     {
         if (typeSymbol.SpecialType == SpecialType.System_String)
@@ -431,8 +422,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
 
         if (type.DeepCollectionEquality && properties.Any(static x => x.Collection == CollectionKind.Unordered))
         {
-            // Multiset comparison over the enumerated element (T for a set, KeyValuePair<K,V>
-            // for a dictionary), so order and rehash history do not affect the result.
+            // Comparison helpers
             builder.NewLine();
             builder.Indent()
                 .Append("private static bool UnorderedEqualOrBothNull<T>(")
@@ -452,9 +442,8 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             builder.BeginScope();
             builder.Indent().Append("return false;").NewLine();
             builder.EndScope();
-            // ValueTuple<T> is a struct key delegating to EqualityComparer<T>.Default, which
-            // satisfies the Dictionary notnull constraint and accepts null elements, keeping
-            // the comparison O(n + m) even for large sets.
+
+            // Unordered comparison
             builder.Indent().Append("var counts = new global::System.Collections.Generic.Dictionary<global::System.ValueTuple<T>, int>();").NewLine();
             builder.Indent().Append("var balance = 0;").NewLine();
             builder.Indent().Append("foreach (var item in a)").NewLine();
@@ -475,8 +464,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             builder.Indent().Append("return balance == 0;").NewLine();
             builder.EndScope();
 
-            // Commutative, unchecked accumulation: equal contents hash equally regardless of
-            // order, and the sum must not throw in projects that compile with checked arithmetic.
+            // Unordered hash helper
             builder.NewLine();
             builder.Indent()
                 .Append("private static int UnorderedHash<T>(global::System.Collections.Generic.IEnumerable<T> source)")
@@ -498,10 +486,6 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             builder.EndScope();
         }
     }
-
-    // ------------------------------------------------------------
-    // Helper
-    // ------------------------------------------------------------
 
     // ------------------------------------------------------------
     // Model

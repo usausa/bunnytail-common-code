@@ -33,8 +33,6 @@ public sealed class CompareToGenerator : IIncrementalGenerator
             targetProvider,
             static (spc, result) => ReportDiagnostics(spc, result));
 
-        // Generation flows from the per-type provider instead of a Collect()ed array, so
-        // editing one type invalidates only that type's output, not every type's.
         var models = targetProvider
             .Where(static x => x.HasValue)
             .Select(static (x, _) => x.Value)
@@ -274,10 +272,6 @@ public sealed class CompareToGenerator : IIncrementalGenerator
             builder.EndScope();
         }
     }
-
-    // ------------------------------------------------------------
-    // Helper
-    // ------------------------------------------------------------
 
     // ------------------------------------------------------------
     // Model

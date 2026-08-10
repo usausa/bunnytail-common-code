@@ -2,15 +2,10 @@ namespace BunnyTail.CommonCode;
 
 using System.Collections.Generic;
 
-using BunnyTail.CommonCode.Generator;
-
 using Microsoft.CodeAnalysis;
 
 using SourceGenerateHelper.Testing;
 
-// Driver-based harness for diagnostic scenarios.
-// The runtime-behaviour tests cover generated code that works; these cover the refusals,
-// which by construction the runtime tests cannot reach.
 internal static class GeneratorTestHelper
 {
     private static GeneratorTestRunner Runner<TGenerator>()

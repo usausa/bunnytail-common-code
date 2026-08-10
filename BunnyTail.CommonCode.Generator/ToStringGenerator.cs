@@ -176,7 +176,6 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             : defaultValue;
     }
 
-    // MSBuild trims the surrounding whitespace of a property value, so quoting allows a value that contains it.
     private static string? Unquote(string? value) =>
         (value is not null) && (value.Length >= 2) && (value[0] == '"') && (value[value.Length - 1] == '"')
             ? value.Substring(1, value.Length - 2)

@@ -34,8 +34,6 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
             targetProvider,
             static (spc, result) => ReportDiagnostics(spc, result));
 
-        // Generation flows from the per-type provider instead of a Collect()ed array, so
-        // editing one type invalidates only that type's output, not every type's.
         var models = targetProvider
             .Where(static x => x.HasValue)
             .Select(static (x, _) => x.Value)
@@ -70,8 +68,6 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         var delegateGroups = new List<GroupModel>();
         var diagnostics = new List<DiagnosticInfo>();
 
-        // Collect members the class already implements (hand-written implementations are skipped)
-        // Methods are handled per signature to distinguish overloads
         var existingSignatures = new HashSet<string>(StringComparer.Ordinal);
         foreach (var existing in symbol.GetMembers())
         {
@@ -119,14 +115,9 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                 continue;
             }
 
-            // Get the explicitly specified InterfaceType
             var delegateAttr = memberAttrs.First(static x => x.AttributeClass?.ToDisplayString() == DelegateToAttributeName);
             var specifiedInterface = GetInterfaceTypeArg(delegateAttr);
 
-            // Resolve the interfaces to delegate to
-            //  - If InterfaceType is specified, that type (verifying the member type implements it)
-            //  - If the member type is an interface, that interface
-            //  - If the member type is a concrete type, the set of interfaces it implements
             IEnumerable<INamedTypeSymbol> interfaces;
             if (specifiedInterface is not null)
             {
@@ -480,10 +471,6 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
             builder.EndScope();
         }
     }
-
-    // ------------------------------------------------------------
-    // Helper
-    // ------------------------------------------------------------
 
     // ------------------------------------------------------------
     // Model
