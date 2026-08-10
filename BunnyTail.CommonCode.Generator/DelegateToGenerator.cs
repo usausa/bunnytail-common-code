@@ -299,7 +299,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
     }
 
     // ------------------------------------------------------------
-    // Execute
+    // Generator
     // ------------------------------------------------------------
 
     private static void ReportDiagnostics(SourceProductionContext context, Result<TypeModel> result)
@@ -505,7 +505,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
     }
 
     // ------------------------------------------------------------
-    // Models
+    // Model
     // ------------------------------------------------------------
 
     private sealed record ContainingTypeModel(

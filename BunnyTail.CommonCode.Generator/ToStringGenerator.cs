@@ -437,7 +437,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     }
 
     // ------------------------------------------------------------
-    // Builder
+    // Generator
     // ------------------------------------------------------------
 
     private static void ReportDiagnostics(SourceProductionContext context, Result<TypeModel> result)
@@ -1199,7 +1199,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     }
 
     // ------------------------------------------------------------
-    // Models
+    // Model
     // ------------------------------------------------------------
 
     // ReSharper disable UnusedMember.Local

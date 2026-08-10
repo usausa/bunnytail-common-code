@@ -139,7 +139,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
     }
 
     // ------------------------------------------------------------
-    // Execute
+    // Generator
     // ------------------------------------------------------------
 
     private static void ReportDiagnostics(SourceProductionContext context, Result<TypeModel> result)
@@ -300,7 +300,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
     }
 
     // ------------------------------------------------------------
-    // Models
+    // Model
     // ------------------------------------------------------------
 
     private sealed record ContainingTypeModel(

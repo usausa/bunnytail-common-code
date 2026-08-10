@@ -160,7 +160,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
     }
 
     // ------------------------------------------------------------
-    // Execute
+    // Generator
     // ------------------------------------------------------------
 
     private static void ReportDiagnostics(SourceProductionContext context, Result<TypeModel> result)
@@ -370,7 +370,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
     }
 
     // ------------------------------------------------------------
-    // Models
+    // Model
     // ------------------------------------------------------------
 
     private enum CloneStrategy

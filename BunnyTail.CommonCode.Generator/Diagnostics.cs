@@ -10,7 +10,7 @@ internal static class Diagnostics
         title: "Invalid type definition",
         messageFormat: "Type must be partial. type=[{0}]",
         category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Warning,
+        defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
     public static DiagnosticDescriptor ToStringFormatOnIgnored { get; } = new(
@@ -43,7 +43,7 @@ internal static class Diagnostics
         title: "Invalid type definition for GenerateEquality",
         messageFormat: "Type must be partial. type=[{0}]",
         category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Warning,
+        defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
     public static DiagnosticDescriptor EqualityNoProperties { get; } = new(
@@ -51,7 +51,7 @@ internal static class Diagnostics
         title: "No equality properties found",
         messageFormat: "No public properties found for equality comparison. type=[{0}]",
         category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Warning,
+        defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
     // DeepClone (03xx)
@@ -60,7 +60,7 @@ internal static class Diagnostics
         title: "Invalid type definition for GenerateDeepClone",
         messageFormat: "Type must be partial. type=[{0}]",
         category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Warning,
+        defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
     public static DiagnosticDescriptor DeepCloneNotImplementIDeepCloneable { get; } = new(
@@ -68,7 +68,7 @@ internal static class Diagnostics
         title: "Type does not implement IDeepCloneable",
         messageFormat: "Type must implement IDeepCloneable<T> to use [GenerateDeepClone]. type=[{0}]",
         category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Warning,
+        defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
     public static DiagnosticDescriptor DeepClonePropertyMissingDeepClone { get; } = new(
@@ -85,7 +85,7 @@ internal static class Diagnostics
         title: "Invalid type definition for GenerateDelegateTo",
         messageFormat: "Type must be partial. type=[{0}]",
         category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Warning,
+        defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
     public static DiagnosticDescriptor DelegateToNoDelegateField { get; } = new(
@@ -93,7 +93,7 @@ internal static class Diagnostics
         title: "No [DelegateTo] field or property found",
         messageFormat: "No field or property with [DelegateTo] attribute found. type=[{0}]",
         category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Warning,
+        defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
     public static DiagnosticDescriptor DelegateToInvalidInterfaceType { get; } = new(
@@ -110,7 +110,7 @@ internal static class Diagnostics
         title: "Invalid type definition for GenerateCompareTo",
         messageFormat: "Type must be partial. type=[{0}]",
         category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Warning,
+        defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
     public static DiagnosticDescriptor CompareToNoKeys { get; } = new(
@@ -118,6 +118,6 @@ internal static class Diagnostics
         title: "No [CompareKey] properties found",
         messageFormat: "No properties with [CompareKey] attribute found. type=[{0}]",
         category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Warning,
+        defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 }

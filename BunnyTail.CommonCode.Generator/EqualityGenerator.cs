@@ -191,7 +191,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
     }
 
     // ------------------------------------------------------------
-    // Execute
+    // Generator
     // ------------------------------------------------------------
 
     private static void ReportDiagnostics(SourceProductionContext context, Result<TypeModel> result)
@@ -525,7 +525,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
     }
 
     // ------------------------------------------------------------
-    // Models
+    // Model
     // ------------------------------------------------------------
 
     private sealed record ContainingTypeModel(
