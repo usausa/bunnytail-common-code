@@ -157,6 +157,87 @@ public class DiagnosticTest
         Assert.Contains(diagnostics, static x => x.Id == "BTCC0402");
     }
 
+    [Fact]
+    public void Btcc0403InvalidInterfaceTypeEmitsDiagnostic()
+    {
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<DelegateToGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            public interface IContract
+            {
+                void Run();
+            }
+
+            public sealed class NotAnImplementation
+            {
+            }
+
+            [GenerateDelegateTo]
+            public partial class Data
+            {
+                [DelegateTo(InterfaceType = typeof(IContract))]
+                private readonly NotAnImplementation inner = default!;
+            }
+            """);
+
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0403");
+    }
+
+    //-----------------------------------------------------------------------
+    // DeepClone
+    //-----------------------------------------------------------------------
+
+    [Fact]
+    public void Btcc0303PropertyMissingDeepCloneEmitsDiagnostic()
+    {
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<DeepCloneGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            public sealed class Inner
+            {
+            }
+
+            [GenerateDeepClone]
+            public partial class Data : IDeepCloneable<Data>
+            {
+                public Inner Value { get; set; } = default!;
+            }
+            """);
+
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0303");
+    }
+
+    //-----------------------------------------------------------------------
+    // ToString
+    //-----------------------------------------------------------------------
+
+    [Fact]
+    public void Btcc0102FormatOnIgnoredEmitsDiagnostic()
+    {
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<ToStringGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateToString]
+            public partial class Data
+            {
+                [IgnoreToString]
+                [ToStringFormat("X")]
+                public int Id { get; set; }
+            }
+            """);
+
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0102");
+    }
+
     //-----------------------------------------------------------------------
     // CompareTo
     //-----------------------------------------------------------------------
