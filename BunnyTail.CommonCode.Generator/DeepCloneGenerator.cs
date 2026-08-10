@@ -40,8 +40,6 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
 
         // Generation flows from the per-type provider instead of a Collect()ed array, so
         // editing one type invalidates only that type's output, not every type's.
-        // HasValue rather than IsSuccess: identical here (Error carries no value), and it
-        // also exists in SourceGenerateHelper 2.0 where IsSuccess was removed.
         var models = targetProvider
             .Where(static x => x.HasValue)
             .Select(static (x, _) => x.Value)
