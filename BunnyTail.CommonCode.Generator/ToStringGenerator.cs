@@ -3,13 +3,13 @@ namespace BunnyTail.CommonCode.Generator;
 using System;
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
-using Microsoft.CodeAnalysis.Text;
 
 using SourceGenerateHelper;
 
@@ -455,9 +455,9 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         var builder = new SourceBuilder();
         BuildSource(builder, options, type);
 
-        var filename = MakeFilename(type.Namespace, type.ContainingTypes, type.ClassName);
-        var source = builder.ToString();
-        context.AddSource(filename, SourceText.From(source, Encoding.UTF8));
+        context.AddSource(
+            HintNameBuilder.Build(type.Namespace, [.. type.ContainingTypes.Select(static x => x.ClassName), type.ClassName]),
+            builder);
     }
 
     private static void BuildSource(SourceBuilder builder, OptionModel options, TypeModel type)
@@ -1172,28 +1172,6 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         }
 
         buffer.Append(symbol.Name);
-
-        return buffer.ToString();
-    }
-
-    private static string MakeFilename(string ns, EquatableArray<ContainingTypeModel> containingTypes, string className)
-    {
-        var buffer = new StringBuilder();
-
-        if (!String.IsNullOrEmpty(ns))
-        {
-            buffer.Append(ns.Replace('.', '_'));
-            buffer.Append('_');
-        }
-
-        foreach (var containingType in containingTypes)
-        {
-            buffer.Append(containingType.ClassName.Replace('<', '[').Replace('>', ']'));
-            buffer.Append('_');
-        }
-
-        buffer.Append(className.Replace('<', '[').Replace('>', ']'));
-        buffer.Append(".g.cs");
 
         return buffer.ToString();
     }

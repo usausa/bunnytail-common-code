@@ -2,12 +2,11 @@ namespace BunnyTail.CommonCode.Generator;
 
 using System;
 using System.Collections.Immutable;
-using System.Text;
+using System.Linq;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Text;
 
 using SourceGenerateHelper;
 
@@ -157,8 +156,9 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         var builder = new SourceBuilder();
         BuildSource(builder, type);
 
-        var filename = MakeFilename(type.Namespace, type.ContainingTypes, type.ClassName, "CompareTo");
-        context.AddSource(filename, SourceText.From(builder.ToString(), Encoding.UTF8));
+        context.AddSource(
+            HintNameBuilder.Build(type.Namespace, [.. type.ContainingTypes.Select(static x => x.ClassName), type.ClassName, "CompareTo"]),
+            builder);
     }
 
     private static void BuildSource(SourceBuilder builder, TypeModel type)
@@ -278,26 +278,6 @@ public sealed class CompareToGenerator : IIncrementalGenerator
     // ------------------------------------------------------------
     // Helper
     // ------------------------------------------------------------
-
-    private static string MakeFilename(string ns, EquatableArray<ContainingTypeModel> containingTypes, string className, string suffix)
-    {
-        var buffer = new StringBuilder();
-        if (!String.IsNullOrEmpty(ns))
-        {
-            buffer.Append(ns.Replace('.', '_'));
-            buffer.Append('_');
-        }
-        foreach (var ct in containingTypes)
-        {
-            buffer.Append(ct.ClassName.Replace('<', '[').Replace('>', ']'));
-            buffer.Append('_');
-        }
-        buffer.Append(className.Replace('<', '[').Replace('>', ']'));
-        buffer.Append('_');
-        buffer.Append(suffix);
-        buffer.Append(".g.cs");
-        return buffer.ToString();
-    }
 
     // ------------------------------------------------------------
     // Model
