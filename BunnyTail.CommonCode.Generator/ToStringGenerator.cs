@@ -210,16 +210,17 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         var diagnostics = new List<DiagnosticInfo>();
         var members = CollectMembers(symbol, diagnostics);
 
-        return Results.Success(new TypeModel(
-            ns,
-            new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
-            symbol.GetClassName(),
-            symbol.IsValueType,
-            symbol.Name,
-            MakeFullName(symbol, ns),
-            new EquatableArray<string>(symbol.TypeParameters.Select(static x => x.Name).ToArray()),
-            new EquatableArray<MemberModel>(members.ToArray()),
-            new EquatableArray<DiagnosticInfo>(diagnostics.ToArray())));
+        return new Result<TypeModel>(
+            new TypeModel(
+                ns,
+                new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
+                symbol.GetClassName(),
+                symbol.IsValueType,
+                symbol.Name,
+                MakeFullName(symbol, ns),
+                new EquatableArray<string>(symbol.TypeParameters.Select(static x => x.Name).ToArray()),
+                new EquatableArray<MemberModel>(members.ToArray())),
+            new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
     }
 
     private static List<MemberModel> CollectMembers(INamedTypeSymbol symbol, List<DiagnosticInfo> diagnostics)
@@ -1278,6 +1279,5 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         string SimpleName,
         string FullName,
         EquatableArray<string> TypeParameters,
-        EquatableArray<MemberModel> Members,
-        EquatableArray<DiagnosticInfo> Diagnostics);
+        EquatableArray<MemberModel> Members);
 }

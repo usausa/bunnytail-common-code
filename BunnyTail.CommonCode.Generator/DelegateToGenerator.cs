@@ -223,13 +223,14 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
             return new Result<TypeModel>(default!, new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
         }
 
-        return Results.Success(new TypeModel(
-            ns,
-            new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
-            symbol.GetClassName(),
-            symbol.IsValueType,
-            new EquatableArray<GroupModel>(delegateGroups.ToArray()),
-            new EquatableArray<DiagnosticInfo>(diagnostics.ToArray())));
+        return new Result<TypeModel>(
+            new TypeModel(
+                ns,
+                new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
+                symbol.GetClassName(),
+                symbol.IsValueType,
+                new EquatableArray<GroupModel>(delegateGroups.ToArray())),
+            new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
     }
 
     private static INamedTypeSymbol? GetInterfaceTypeArg(AttributeData attr)
@@ -504,6 +505,5 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         EquatableArray<ContainingTypeModel> ContainingTypes,
         string ClassName,
         bool IsValueType,
-        EquatableArray<GroupModel> Groups,
-        EquatableArray<DiagnosticInfo> Diagnostics);
+        EquatableArray<GroupModel> Groups);
 }
