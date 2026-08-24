@@ -132,7 +132,8 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             collectionOpenBracket,
             collectionCloseBracket,
             hasCollectionBracket ? ResolveSpace(collectionInnerSpace) : string.Empty,
-            collectionSeparator);
+            collectionSeparator,
+            GetBoolOption(options, "SkipLocalsInit", false));
     }
 
     private static string ResolveBracket(BracketOption bracket, string value, bool open)
@@ -166,6 +167,12 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     {
         var value = Unquote(options.GetValue<string?>(OptionPrefix + name));
         return String.IsNullOrEmpty(value) ? defaultValue : value!;
+    }
+
+    private static bool GetBoolOption(AnalyzerConfigOptions options, string name, bool defaultValue)
+    {
+        var value = options.GetValue<string?>(OptionPrefix + name);
+        return !String.IsNullOrEmpty(value) && Boolean.TryParse(value, out var result) ? result : defaultValue;
     }
 
     private static int GetIntOption(AnalyzerConfigOptions options, string name, int defaultValue)
@@ -218,9 +225,9 @@ public sealed class ToStringGenerator : IIncrementalGenerator
                 symbol.IsValueType,
                 symbol.Name,
                 MakeFullName(symbol, ns),
-                new EquatableArray<string>(symbol.TypeParameters.Select(static x => x.Name).ToArray()),
-                new EquatableArray<MemberModel>(members.ToArray())),
-            new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
+                new EquatableArray<string>([.. symbol.TypeParameters.Select(static x => x.Name)]),
+                new EquatableArray<MemberModel>([.. members])),
+            new EquatableArray<DiagnosticInfo>([.. diagnostics]));
     }
 
     private static List<MemberModel> CollectMembers(INamedTypeSymbol symbol, List<DiagnosticInfo> diagnostics)
@@ -547,6 +554,11 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         {
             BuildTypeNameCache(builder, type, typeName, head.ToString());
             builder.NewLine();
+        }
+
+        if (options.SkipLocalsInit && (members.Count > 0))
+        {
+            builder.Indent().Append("[global::System.Runtime.CompilerServices.SkipLocalsInit]").NewLine();
         }
 
         builder
@@ -1254,7 +1266,8 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         string CollectionOpenBracket,
         string CollectionCloseBracket,
         string CollectionInnerSpace,
-        string CollectionSeparator);
+        string CollectionSeparator,
+        bool SkipLocalsInit);
 
     private sealed record ContainingTypeModel(
         string ClassName,

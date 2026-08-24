@@ -1,6 +1,15 @@
 <Project>
 
+  <PropertyGroup>
+    <CommonCodeGeneratorToStringSkipLocalsInit Condition="'$(CommonCodeGeneratorToStringSkipLocalsInit)' == ''">true</CommonCodeGeneratorToStringSkipLocalsInit>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(CommonCodeGeneratorToStringSkipLocalsInit)' == 'true'">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
   <ItemGroup>
+    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringSkipLocalsInit" />
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringTypeName" />
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringTypeArgument" />
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringNull" />
