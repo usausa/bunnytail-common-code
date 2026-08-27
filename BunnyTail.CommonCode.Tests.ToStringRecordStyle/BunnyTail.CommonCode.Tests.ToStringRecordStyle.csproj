@@ -24,7 +24,7 @@
     <CommonCodeGeneratorToStringMembers>PropertyAndField</CommonCodeGeneratorToStringMembers>
   </PropertyGroup>
 
-  <Import Project="..\BunnyTail.CommonCode.props" />
+  <Import Project="..\BunnyTail.CommonCode.targets" />
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
