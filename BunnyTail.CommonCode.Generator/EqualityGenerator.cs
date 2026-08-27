@@ -113,13 +113,13 @@ public sealed class EqualityGenerator : IIncrementalGenerator
 
         return Results.Success(new TypeModel(
             ns,
-            new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
+            new EquatableArray<ContainingTypeModel>(containingTypes ?? []),
             symbol.GetClassName(),
             symbol.IsValueType,
             symbol.IsSealed,
             generateOperators,
             deepCollectionEquality,
-            new EquatableArray<PropertyModel>(properties.ToArray())));
+            new EquatableArray<PropertyModel>(properties)));
     }
 
     private static bool? GetBoolArg(AttributeData attr, string name)

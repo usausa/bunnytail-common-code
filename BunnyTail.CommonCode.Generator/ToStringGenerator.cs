@@ -220,14 +220,14 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         return new Result<TypeModel>(
             new TypeModel(
                 ns,
-                new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
+                new EquatableArray<ContainingTypeModel>(containingTypes ?? []),
                 symbol.GetClassName(),
                 symbol.IsValueType,
                 symbol.Name,
                 MakeFullName(symbol, ns),
-                new EquatableArray<string>([.. symbol.TypeParameters.Select(static x => x.Name)]),
-                new EquatableArray<MemberModel>([.. members])),
-            new EquatableArray<DiagnosticInfo>([.. diagnostics]));
+                new EquatableArray<string>(symbol.TypeParameters.Select(static x => x.Name)),
+                new EquatableArray<MemberModel>(members)),
+            new EquatableArray<DiagnosticInfo>(diagnostics));
     }
 
     private static List<MemberModel> CollectMembers(INamedTypeSymbol symbol, List<DiagnosticInfo> diagnostics)

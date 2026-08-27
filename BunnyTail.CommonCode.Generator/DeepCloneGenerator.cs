@@ -121,11 +121,11 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         return new Result<TypeModel>(
             new TypeModel(
                 ns,
-                new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
+                new EquatableArray<ContainingTypeModel>(containingTypes ?? []),
                 symbol.GetClassName(),
                 symbol.IsValueType,
-                new EquatableArray<PropertyModel>([.. properties])),
-            new EquatableArray<DiagnosticInfo>([.. diagnostics]));
+                new EquatableArray<PropertyModel>(properties)),
+            new EquatableArray<DiagnosticInfo>(diagnostics));
     }
 
     private static CloneStrategy GetCloneStrategy(ITypeSymbol typeSymbol)

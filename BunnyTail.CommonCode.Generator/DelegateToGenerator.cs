@@ -209,7 +209,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
 
             if (methods.Count > 0)
             {
-                delegateGroups.Add(new GroupModel(memberName, new EquatableArray<MethodModel>(methods.ToArray())));
+                delegateGroups.Add(new GroupModel(memberName, new EquatableArray<MethodModel>(methods)));
             }
         }
 
@@ -220,17 +220,17 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
                 diagnostics.Add(new DiagnosticInfo(Diagnostics.DelegateToNoDelegateField, syntax.Identifier.GetLocation(), symbol.Name));
             }
 
-            return new Result<TypeModel>(default!, new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
+            return new Result<TypeModel>(default!, new EquatableArray<DiagnosticInfo>(diagnostics));
         }
 
         return new Result<TypeModel>(
             new TypeModel(
                 ns,
-                new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
+                new EquatableArray<ContainingTypeModel>(containingTypes ?? []),
                 symbol.GetClassName(),
                 symbol.IsValueType,
-                new EquatableArray<GroupModel>(delegateGroups.ToArray())),
-            new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
+                new EquatableArray<GroupModel>(delegateGroups)),
+            new EquatableArray<DiagnosticInfo>(diagnostics));
     }
 
     private static INamedTypeSymbol? GetInterfaceTypeArg(AttributeData attr)

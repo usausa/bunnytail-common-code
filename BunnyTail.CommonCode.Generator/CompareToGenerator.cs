@@ -96,11 +96,11 @@ public sealed class CompareToGenerator : IIncrementalGenerator
 
         return Results.Success(new TypeModel(
             ns,
-            new EquatableArray<ContainingTypeModel>(containingTypes?.ToArray() ?? []),
+            new EquatableArray<ContainingTypeModel>(containingTypes ?? []),
             symbol.GetClassName(),
             symbol.IsValueType,
             generateOperators,
-            new EquatableArray<KeyModel>(keys.Select(static k => new KeyModel(k.Name, k.TypeName)).ToArray())));
+            new EquatableArray<KeyModel>(keys.Select(static k => new KeyModel(k.Name, k.TypeName)))));
     }
 
     private static bool? GetBoolArg(AttributeData attr, string name)
