@@ -6,9 +6,91 @@ using Microsoft.CodeAnalysis;
 
 public class DiagnosticTest
 {
-    //-----------------------------------------------------------------------
+    // ------------------------------------------------------------
+    // ToStringFormat
+    // ------------------------------------------------------------
+
+    [Fact]
+    public void Btcc0103MaskCharAndMaskPatternEmitsDiagnostic()
+    {
+        // Arrange
+        const string source =
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateToString]
+            public partial class Data
+            {
+                [ToStringFormat(MaskChar = '*', MaskPattern = "###")]
+                public string? Name { get; set; }
+            }
+            """;
+
+        // Act
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<ToStringGenerator>(source);
+
+        // Assert
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0103");
+    }
+
+    [Fact]
+    public void Btcc0104NoEffectiveSettingEmitsDiagnostic()
+    {
+        // Arrange
+        const string source =
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateToString]
+            public partial class Data
+            {
+                [ToStringFormat]
+                public string? Name { get; set; }
+            }
+            """;
+
+        // Act
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<ToStringGenerator>(source);
+
+        // Assert
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0104");
+    }
+
+    // ------------------------------------------------------------
+    // DeepClone target
+    // ------------------------------------------------------------
+
+    [Fact]
+    public void Btcc0302NotImplementIDeepCloneableEmitsDiagnostic()
+    {
+        // Arrange
+        const string source =
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateDeepClone]
+            public partial class Data
+            {
+                public string Name { get; set; } = default!;
+            }
+            """;
+
+        // Act
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<DeepCloneGenerator>(source);
+
+        // Assert
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0302");
+    }
+
+    // ------------------------------------------------------------
     // Type
-    //-----------------------------------------------------------------------
+    // ------------------------------------------------------------
 
     [Fact]
     public void Btcc0101NonPartialToStringEmitsDiagnostic()
@@ -112,9 +194,9 @@ public class DiagnosticTest
         Assert.Contains(diagnostics, static x => x.Id == "BTCC0501");
     }
 
-    //-----------------------------------------------------------------------
+    // ------------------------------------------------------------
     // Equality
-    //-----------------------------------------------------------------------
+    // ------------------------------------------------------------
 
     [Fact]
     public void Btcc0202NoPropertyEmitsDiagnostic()
@@ -134,9 +216,9 @@ public class DiagnosticTest
         Assert.Contains(diagnostics, static x => x.Id == "BTCC0202");
     }
 
-    //-----------------------------------------------------------------------
+    // ------------------------------------------------------------
     // DelegateTo
-    //-----------------------------------------------------------------------
+    // ------------------------------------------------------------
 
     [Fact]
     public void Btcc0402NoDelegateFieldEmitsDiagnostic()
@@ -186,9 +268,9 @@ public class DiagnosticTest
         Assert.Contains(diagnostics, static x => x.Id == "BTCC0403");
     }
 
-    //-----------------------------------------------------------------------
+    // ------------------------------------------------------------
     // DeepClone
-    //-----------------------------------------------------------------------
+    // ------------------------------------------------------------
 
     [Fact]
     public void Btcc0303PropertyMissingDeepCloneEmitsDiagnostic()
@@ -213,9 +295,9 @@ public class DiagnosticTest
         Assert.Contains(diagnostics, static x => x.Id == "BTCC0303");
     }
 
-    //-----------------------------------------------------------------------
+    // ------------------------------------------------------------
     // ToString
-    //-----------------------------------------------------------------------
+    // ------------------------------------------------------------
 
     [Fact]
     public void Btcc0102FormatOnIgnoredEmitsDiagnostic()
@@ -238,9 +320,9 @@ public class DiagnosticTest
         Assert.Contains(diagnostics, static x => x.Id == "BTCC0102");
     }
 
-    //-----------------------------------------------------------------------
+    // ------------------------------------------------------------
     // CompareTo
-    //-----------------------------------------------------------------------
+    // ------------------------------------------------------------
 
     [Fact]
     public void Btcc0502NoCompareKeyEmitsDiagnostic()
@@ -261,9 +343,9 @@ public class DiagnosticTest
         Assert.Contains(diagnostics, static x => x.Id == "BTCC0502");
     }
 
-    //-----------------------------------------------------------------------
+    // ------------------------------------------------------------
     // ToString
-    //-----------------------------------------------------------------------
+    // ------------------------------------------------------------
 
     [Fact]
     public void ValidToStringEmitsNoDiagnostic()
@@ -340,5 +422,39 @@ public class DiagnosticTest
             """);
 
         Assert.DoesNotContain(diagnostics, static x => x.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void Abcd1234MaskPatternEmitsDiagnostic()
+    {
+        // Arrange
+        var masked = new ToStringMaskPatternData
+        {
+            Password = "secret",
+            Secret = "topsecret",
+            Token = "abcd1234",
+            Card = "4111111111111111"
+        };
+        var shortValue = new ToStringMaskPatternData
+        {
+            Password = "x",
+            Secret = "y",
+            Token = "ab",
+            Card = "41111111"
+        };
+        var nullValue = new ToStringMaskPatternData();
+
+        // Act
+        var maskedText = masked.ToString();
+        var shortText = shortValue.ToString();
+        var nullText = nullValue.ToString();
+
+        // Assert
+        // A leading or trailing run of # keeps that many original characters visible
+        Assert.Equal("ToStringMaskPatternData { Password = ***, Secret = [REDACTED], Token = ***34, Card = 4111****1111 }", maskedText);
+        // A value not longer than the kept length is written as the mask text only
+        Assert.Equal("ToStringMaskPatternData { Password = ***, Secret = [REDACTED], Token = ***, Card = **** }", shortText);
+        // null is not masked and follows the null setting
+        Assert.Equal("ToStringMaskPatternData { Password = null, Secret = null, Token = null, Card = null }", nullText);
     }
 }

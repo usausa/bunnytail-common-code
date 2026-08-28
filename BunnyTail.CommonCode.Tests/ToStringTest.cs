@@ -406,40 +406,6 @@ public class ToStringTest
     }
 
     [Fact]
-    public void TestMaskPattern()
-    {
-        // Arrange
-        var masked = new ToStringMaskPatternData
-        {
-            Password = "secret",
-            Secret = "topsecret",
-            Token = "abcd1234",
-            Card = "4111111111111111"
-        };
-        var shortValue = new ToStringMaskPatternData
-        {
-            Password = "x",
-            Secret = "y",
-            Token = "ab",
-            Card = "41111111"
-        };
-        var nullValue = new ToStringMaskPatternData();
-
-        // Act
-        var maskedText = masked.ToString();
-        var shortText = shortValue.ToString();
-        var nullText = nullValue.ToString();
-
-        // Assert
-        // A leading or trailing run of # keeps that many original characters visible
-        Assert.Equal("ToStringMaskPatternData { Password = ***, Secret = [REDACTED], Token = ***34, Card = 4111****1111 }", maskedText);
-        // A value not longer than the kept length is written as the mask text only
-        Assert.Equal("ToStringMaskPatternData { Password = ***, Secret = [REDACTED], Token = ***, Card = **** }", shortText);
-        // null is not masked and follows the null setting
-        Assert.Equal("ToStringMaskPatternData { Password = null, Secret = null, Token = null, Card = null }", nullText);
-    }
-
-    [Fact]
     public void TestMaskChar()
     {
         // Arrange

@@ -26,4 +26,8 @@ internal static class GeneratorTestHelper
     public static string GetGeneratedSource<TGenerator>(string source)
         where TGenerator : IIncrementalGenerator, new()
         => Runner<TGenerator>().GetGeneratedSource(source);
+
+    public static IncrementalRunResult RunIncremental<TGenerator>(string source, string addedSource)
+        where TGenerator : IIncrementalGenerator, new()
+        => Runner<TGenerator>().WithTracking().RunIncremental(source, addedSource);
 }
