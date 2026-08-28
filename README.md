@@ -186,17 +186,6 @@ A value not longer than the kept length is written as the mask text only.
 
 Masking overrides collection expansion, and an expanded collection is limited by `CollectionLimit` instead of `MaxLength`. A `null` value follows the `Null` setting and is neither masked nor truncated.
 
-### Diagnostics
-
-| ID | Severity | Description |
-|---|---|---|
-| BTCC0101 | Warning | Type must be partial |
-| BTCC0102 | Warning | `[ToStringFormat]` on a member excluded by `[IgnoreToString]` |
-| BTCC0103 | Warning | `MaskChar` is ignored because `MaskPattern` takes precedence |
-| BTCC0104 | Warning | `[ToStringFormat]` has no effective setting |
-
----
-
 ## Equality
 
 Generates `IEquatable<T>`, `Equals`, `GetHashCode`, and optional equality operators.
@@ -242,15 +231,6 @@ var b = new OrderData { Id = 1, Name = "x", UpdatedAt = DateTime.Now };
 Assert.True(a.Equals(b)); // UpdatedAt is ignored
 ```
 
-### Diagnostics
-
-| ID | Severity | Description |
-|---|---|---|
-| BTCC0201 | Warning | Type must be partial |
-| BTCC0202 | Warning | No public properties found for equality comparison |
-
----
-
 ## CompareTo
 
 Generates `IComparable<T>` and relational operators using properties marked with `[CompareKey]`.
@@ -284,15 +264,6 @@ var a = new PersonData { LastName = "Adams", FirstName = "Alice" };
 var b = new PersonData { LastName = "Zorn",  FirstName = "Bob"   };
 Assert.True(a < b);
 ```
-
-### Diagnostics
-
-| ID | Severity | Description |
-|---|---|---|
-| BTCC0501 | Warning | Type must be partial |
-| BTCC0502 | Warning | No `[CompareKey]` properties found |
-
----
 
 ## DeepClone
 
@@ -342,16 +313,6 @@ clone.Tags.Add("new");
 Assert.Equal(2, doc.Tags.Count);  // original unchanged
 ```
 
-### Diagnostics
-
-| ID | Severity | Description |
-|---|---|---|
-| BTCC0301 | Warning | Type must be partial |
-| BTCC0302 | Warning | Type must implement `IDeepCloneable<T>` |
-| BTCC0303 | Warning | Property type does not support deep clone; use `[ShallowClone]` to suppress |
-
----
-
 ## DelegateTo
 
 Generates forwarding members that delegate method and property calls to an attributed field or property.
@@ -384,10 +345,3 @@ Assert.Equal("Hello-5", svc.GetMessage());
 
 The generator will not emit a member if the containing type already defines it, allowing manual overrides.
 
-### Diagnostics
-
-| ID | Severity | Description |
-|---|---|---|
-| BTCC0401 | Warning | Type must be partial |
-| BTCC0402 | Warning | No `[DelegateTo]` field or property found |
-| BTCC0403 | Warning | `InterfaceType` must be an interface implemented by the delegate member type |
