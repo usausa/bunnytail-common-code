@@ -8,7 +8,7 @@ internal static class Diagnostics
     public static DiagnosticDescriptor InvalidTypeDefinition { get; } = new(
         id: "BTCC0101",
         title: "Invalid type definition",
-        messageFormat: "Type must be partial. type=[{0}]",
+        messageFormat: "[GenerateToString] type must be partial. type=[{0}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -41,7 +41,7 @@ internal static class Diagnostics
     public static DiagnosticDescriptor EqualityInvalidTypeDefinition { get; } = new(
         id: "BTCC0201",
         title: "Invalid type for GenerateEquality",
-        messageFormat: "Type must be partial. type=[{0}]",
+        messageFormat: "[GenerateEquality] type must be partial. type=[{0}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -58,7 +58,7 @@ internal static class Diagnostics
     public static DiagnosticDescriptor DeepCloneInvalidTypeDefinition { get; } = new(
         id: "BTCC0301",
         title: "Invalid type for GenerateDeepClone",
-        messageFormat: "Type must be partial. type=[{0}]",
+        messageFormat: "[GenerateDeepClone] type must be partial. type=[{0}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -66,7 +66,7 @@ internal static class Diagnostics
     public static DiagnosticDescriptor DeepCloneNotImplementIDeepCloneable { get; } = new(
         id: "BTCC0302",
         title: "Type does not implement IDeepCloneable",
-        messageFormat: "Type must implement IDeepCloneable<T>. type=[{0}]",
+        messageFormat: "[GenerateDeepClone] type must implement IDeepCloneable<T>. type=[{0}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -83,7 +83,7 @@ internal static class Diagnostics
     public static DiagnosticDescriptor DelegateToInvalidTypeDefinition { get; } = new(
         id: "BTCC0401",
         title: "Invalid type for GenerateDelegateTo",
-        messageFormat: "Type must be partial. type=[{0}]",
+        messageFormat: "[GenerateDelegateTo] type must be partial. type=[{0}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -99,7 +99,7 @@ internal static class Diagnostics
     public static DiagnosticDescriptor DelegateToInvalidInterfaceType { get; } = new(
         id: "BTCC0403",
         title: "Invalid InterfaceType for [DelegateTo]",
-        messageFormat: "InterfaceType is not implemented. member=[{0}], interfaceType=[{1}]",
+        messageFormat: "[DelegateTo] InterfaceType is not implemented. member=[{0}], interfaceType=[{1}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
@@ -108,7 +108,7 @@ internal static class Diagnostics
     public static DiagnosticDescriptor CompareToInvalidTypeDefinition { get; } = new(
         id: "BTCC0501",
         title: "Invalid type for GenerateCompareTo",
-        messageFormat: "Type must be partial. type=[{0}]",
+        messageFormat: "[GenerateCompareTo] type must be partial. type=[{0}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
