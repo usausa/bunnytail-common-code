@@ -71,11 +71,11 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         var existingSignatures = new HashSet<string>(StringComparer.Ordinal);
         foreach (var existing in symbol.GetMembers())
         {
-            if (existing is IMethodSymbol existingMethod && existingMethod.MethodKind == MethodKind.Ordinary && !existingMethod.IsAbstract)
+            if ((existing is IMethodSymbol existingMethod) && (existingMethod.MethodKind == MethodKind.Ordinary) && !existingMethod.IsAbstract)
             {
                 existingSignatures.Add(MakeMethodSignature(existingMethod));
             }
-            else if (existing is IPropertySymbol existingProperty && !existingProperty.IsAbstract)
+            else if ((existing is IPropertySymbol existingProperty) && !existingProperty.IsAbstract)
             {
                 existingSignatures.Add("property:" + existingProperty.Name);
             }
@@ -133,7 +133,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
 
                 interfaces = WithBaseInterfaces(specifiedInterface);
             }
-            else if (memberType is INamedTypeSymbol namedMemberType && (memberType.TypeKind == TypeKind.Interface))
+            else if ((memberType is INamedTypeSymbol namedMemberType) && (memberType.TypeKind == TypeKind.Interface))
             {
                 interfaces = WithBaseInterfaces(namedMemberType);
             }

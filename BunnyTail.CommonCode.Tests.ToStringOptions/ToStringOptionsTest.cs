@@ -29,6 +29,7 @@ public partial class OptionGenericData<T>
 }
 
 // ReSharper disable once PartialTypeWithSinglePart
+#pragma warning disable CA1034
 [GenerateToString]
 public partial class OptionEmptyData;
 
@@ -40,6 +41,7 @@ public static partial class OptionOuterData
         public int Id { get; set; }
     }
 }
+#pragma warning restore CA1034
 
 public class ToStringOptionsTest
 {

@@ -423,7 +423,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
                 return (true, isNullAssignable, elementType.IsReferenceType || elementType.IsGenericType());
             }
 
-            if (typeSymbol is INamedTypeSymbol { IsGenericType: true } namedTypeSymbol &&
+            if ((typeSymbol is INamedTypeSymbol { IsGenericType: true } namedTypeSymbol) &&
                 (namedTypeSymbol.ConstructedFrom.ToDisplayString() == GenericEnumerableName))
             {
                 var elementType = namedTypeSymbol.TypeArguments[0];

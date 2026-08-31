@@ -6,6 +6,7 @@ public partial class DeepCloneAuthorData : IDeepCloneable<DeepCloneAuthorData>
     public string Name { get; set; } = default!;
 }
 
+#pragma warning disable CA1002
 #pragma warning disable CA1819
 #pragma warning disable CA2227
 [GenerateDeepClone]
@@ -27,6 +28,7 @@ public partial class DeepCloneDocumentData : IDeepCloneable<DeepCloneDocumentDat
 }
 #pragma warning restore CA2227
 #pragma warning restore CA1819
+#pragma warning restore CA1002
 
 [GenerateDeepClone]
 public partial class DeepCloneProfileData : IDeepCloneable<DeepCloneProfileData>

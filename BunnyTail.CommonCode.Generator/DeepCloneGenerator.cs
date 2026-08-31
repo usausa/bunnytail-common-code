@@ -58,7 +58,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
 
         // Check whether IDeepCloneable<T> is implemented
         var implementsDeepCloneable = symbol.AllInterfaces.Any(static x =>
-            x.IsGenericType && x.ConstructedFrom.ToDisplayString() == IDeepCloneableName);
+            x.IsGenericType && (x.ConstructedFrom.ToDisplayString() == IDeepCloneableName));
         if (!implementsDeepCloneable)
         {
             return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.DeepCloneNotImplementIDeepCloneable, syntax.Identifier.GetLocation(), symbol.Name));
@@ -135,7 +135,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
             return CloneStrategy.Direct;
         }
 
-        if (typeSymbol.AllInterfaces.Any(static x => x.IsGenericType && x.ConstructedFrom.ToDisplayString() == IDeepCloneableName))
+        if (typeSymbol.AllInterfaces.Any(static x => x.IsGenericType && (x.ConstructedFrom.ToDisplayString() == IDeepCloneableName)))
         {
             return CloneStrategy.DeepClone;
         }

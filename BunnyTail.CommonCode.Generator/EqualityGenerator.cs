@@ -285,7 +285,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
                 builder.Indent().Append("    ");
             }
 
-            if (prop.Collection != CollectionKind.None && type.DeepCollectionEquality)
+            if ((prop.Collection != CollectionKind.None) && type.DeepCollectionEquality)
             {
                 builder
                     .Append(prop.Collection == CollectionKind.Unordered ? "UnorderedEqualOrBothNull(this." : "SequenceEqualOrBothNull(this.")
@@ -322,7 +322,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         builder.Indent().Append("var hash = new global::System.HashCode();").NewLine();
         foreach (var prop in properties)
         {
-            if (prop.Collection == CollectionKind.Sequence && type.DeepCollectionEquality)
+            if ((prop.Collection == CollectionKind.Sequence) && type.DeepCollectionEquality)
             {
                 builder.Indent().Append("if (this.").Append(prop.Name).Append(" is not null)").NewLine();
                 builder.BeginScope();
@@ -332,7 +332,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
                 builder.EndScope();
                 builder.EndScope();
             }
-            else if (prop.Collection == CollectionKind.Unordered && type.DeepCollectionEquality)
+            else if ((prop.Collection == CollectionKind.Unordered) && type.DeepCollectionEquality)
             {
                 builder.Indent().Append("if (this.").Append(prop.Name).Append(" is not null)").NewLine();
                 builder.BeginScope();
