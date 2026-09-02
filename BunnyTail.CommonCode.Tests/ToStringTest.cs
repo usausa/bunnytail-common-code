@@ -40,7 +40,6 @@ public partial class ToStringGenericPairData<TKey, TValue>
 }
 
 // ReSharper disable once PartialTypeWithSinglePart
-#pragma warning disable CA1034
 [GenerateToString]
 public partial class ToStringEmptyGenericData<T>;
 
@@ -54,7 +53,6 @@ public static partial class ToStringOuterData
         public string Name { get; set; } = default!;
     }
 }
-#pragma warning restore CA1034
 
 public class ToStringShadowBase
 {
