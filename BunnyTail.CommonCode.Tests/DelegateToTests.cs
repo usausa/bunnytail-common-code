@@ -137,7 +137,7 @@ public partial class DelegateToManualPropertyFacade : IDelegateToManualProperty
     public int Value { get; set; }
 }
 
-public class DelegateToTest
+public class DelegateToTests
 {
     [Fact]
     public void WhenGetMessageCalledThenDelegateToInner()

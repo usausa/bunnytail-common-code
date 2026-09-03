@@ -41,7 +41,7 @@ public static partial class OptionOuterData
     }
 }
 
-public class ToStringOptionsTest
+public class ToStringOptionsTests
 {
     [Fact]
     public void TestFullTypeNameAndBracket()

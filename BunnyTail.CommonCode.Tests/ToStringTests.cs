@@ -234,7 +234,7 @@ public partial class ToStringFormatMaxLengthData
     public int Number { get; set; }
 }
 
-public class ToStringTest
+public class ToStringTests
 {
     [Fact]
     public void TestBasic()

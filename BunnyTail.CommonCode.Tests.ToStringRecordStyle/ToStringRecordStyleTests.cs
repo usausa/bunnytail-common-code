@@ -81,7 +81,7 @@ public partial class RecordMaskData
     public string? Password { get; set; }
 }
 
-public class ToStringRecordStyleTest
+public class ToStringRecordStyleTests
 {
     [Fact]
     public void TestScalar()

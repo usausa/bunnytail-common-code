@@ -14,7 +14,7 @@ public partial class CompareToPersonData
 }
 #pragma warning restore CA1036
 
-public class CompareToTest
+public class CompareToTests
 {
     [Fact]
     public void WhenSameKeysThenZero()

@@ -58,7 +58,7 @@ public partial class DeepCloneIndexedData : IDeepCloneable<DeepCloneIndexedData>
     }
 }
 
-public class DeepCloneTest
+public class DeepCloneTests
 {
     [Fact]
     public void WhenClonedThenIndependentCopy()

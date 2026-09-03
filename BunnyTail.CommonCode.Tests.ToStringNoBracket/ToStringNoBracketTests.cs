@@ -19,7 +19,7 @@ public partial class NoBracketData
 [GenerateToString]
 public partial class NoBracketEmptyData;
 
-public class ToStringNoBracketTest
+public class ToStringNoBracketTests
 {
     [Fact]
     public void TestNoTypeNameAndOpenBracket()

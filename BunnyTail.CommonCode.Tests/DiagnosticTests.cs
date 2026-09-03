@@ -4,7 +4,7 @@ using BunnyTail.CommonCode.Generator;
 
 using Microsoft.CodeAnalysis;
 
-public class DiagnosticTest
+public class DiagnosticTests
 {
     // ------------------------------------------------------------
     // ToStringFormat

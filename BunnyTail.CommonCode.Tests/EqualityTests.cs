@@ -122,7 +122,7 @@ internal sealed partial class EqualityNullableSetData
     public HashSet<string?> Set { get; init; } = [];
 }
 
-public class EqualityTest
+public class EqualityTests
 {
     [Fact]
     public void WhenSetHasSameContentsInDifferentOrderThenEquals()
