@@ -14,6 +14,14 @@ public partial class CompareToPersonData
 }
 #pragma warning restore CA1036
 
+#pragma warning disable CA1036
+[GenerateCompareTo]
+public partial record CompareToRecordData([property: CompareKey(Order = 1)] string Name, [property: CompareKey(Order = 2)] int Age);
+
+[GenerateCompareTo]
+public partial record struct CompareToRecordStructData([property: CompareKey] int Value);
+#pragma warning restore CA1036
+
 public class CompareToTests
 {
     [Fact]
@@ -139,5 +147,29 @@ public class CompareToTests
 
         // Assert
         Assert.True(result); // True also when equal
+    }
+
+    [Fact]
+    public void WhenRecordFirstKeySameThenCompareBySecond()
+    {
+        // Arrange
+        var a = new CompareToRecordData("name", 1);
+        var b = new CompareToRecordData("name", 2);
+
+        // Act & Assert
+        Assert.True(a.CompareTo(b) < 0);
+        Assert.True(a < b);
+    }
+
+    [Fact]
+    public void WhenRecordStructComparedThenCompareByKey()
+    {
+        // Arrange
+        var a = new CompareToRecordStructData(2);
+        var b = new CompareToRecordStructData(1);
+
+        // Act & Assert
+        Assert.True(a.CompareTo(b) > 0);
+        Assert.True(a > b);
     }
 }

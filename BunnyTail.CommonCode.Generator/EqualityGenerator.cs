@@ -26,7 +26,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         var targetProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 GenerateAttributeName,
-                static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax,
+                static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax,
                 static (ctx, _) => GetTypeModel(ctx))
             .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : []);
 
@@ -55,15 +55,9 @@ public sealed class EqualityGenerator : IIncrementalGenerator
 
         var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name) ? string.Empty : symbol.ContainingNamespace.ToDisplayString();
 
-        var containingTypes = default(List<ContainingTypeModel>?);
-        var containingSymbol = symbol.ContainingType;
-        while (containingSymbol is not null)
-        {
-            containingTypes ??= [];
-            containingTypes.Add(new ContainingTypeModel(containingSymbol.GetClassName(), containingSymbol.IsValueType));
-            containingSymbol = containingSymbol.ContainingType;
-        }
-        containingTypes?.Reverse();
+        var containingTypes = symbol.GetContainingTypes()
+            .Select(static x => new ContainingTypeModel(x.GetClassName(), x.GetDeclarationKeyword()))
+            .ToArray();
 
         var attr = symbol.GetAttributes().First(static x => x.AttributeClass?.ToDisplayString() == GenerateAttributeName);
 
@@ -113,9 +107,11 @@ public sealed class EqualityGenerator : IIncrementalGenerator
 
         return Results.Success(new TypeModel(
             ns,
-            new EquatableArray<ContainingTypeModel>(containingTypes ?? []),
+            new EquatableArray<ContainingTypeModel>(containingTypes),
             symbol.GetClassName(),
+            symbol.GetDeclarationKeyword(),
             symbol.IsValueType,
+            symbol.IsRecord,
             symbol.IsSealed,
             generateOperators,
             deepCollectionEquality,
@@ -222,7 +218,8 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         {
             builder.Indent()
                 .Append("partial ")
-                .Append(ct.IsValueType ? "struct " : "class ")
+                .Append(ct.Keyword)
+                .Append(" ")
                 .Append(ct.ClassName)
                 .NewLine();
             builder.BeginScope();
@@ -230,25 +227,34 @@ public sealed class EqualityGenerator : IIncrementalGenerator
 
         builder.Indent()
             .Append("partial ")
-            .Append(type.IsValueType ? "struct " : "class ")
-            .Append(type.ClassName)
-            .Append(" : global::System.IEquatable<")
-            .Append(type.ClassName)
-            .Append(">")
-            .NewLine();
+            .Append(type.Keyword)
+            .Append(" ")
+            .Append(type.ClassName);
+        if (!type.IsRecord)
+        {
+            builder
+                .Append(" : global::System.IEquatable<")
+                .Append(type.ClassName)
+                .Append(">");
+        }
+
+        builder.NewLine();
         builder.BeginScope();
 
         // Equals(object?)
-        builder.Indent()
-            .Append("public override bool Equals(object? obj) => obj is ")
-            .Append(type.ClassName)
-            .Append(" other && Equals(other);")
-            .NewLine();
-        builder.NewLine();
+        if (!type.IsRecord)
+        {
+            builder.Indent()
+                .Append("public override bool Equals(object? obj) => obj is ")
+                .Append(type.ClassName)
+                .Append(" other && Equals(other);")
+                .NewLine();
+            builder.NewLine();
+        }
 
         // Equals(T) for value types, Equals(T?) for reference types
         builder.Indent()
-            .Append("public bool Equals(")
+            .Append(type.IsRecord && !type.IsValueType && !type.IsSealed ? "public virtual bool Equals(" : "public bool Equals(")
             .Append(type.ClassName)
             .Append(type.IsValueType ? " other)" : "? other)")
             .NewLine();
@@ -268,7 +274,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
 
             if (!type.IsSealed)
             {
-                builder.Indent().Append("if (this.GetType() != other.GetType())").NewLine();
+                builder.Indent().Append(type.IsRecord ? "if (this.EqualityContract != other.EqualityContract)" : "if (this.GetType() != other.GetType())").NewLine();
                 builder.BeginScope();
                 builder.Indent().Append("return false;").NewLine();
                 builder.EndScope();
@@ -348,7 +354,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         builder.EndScope();
 
         // Operators
-        if (type.GenerateOperators)
+        if (type.GenerateOperators && !type.IsRecord)
         {
             builder.NewLine();
             if (type.IsValueType)
@@ -493,7 +499,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
 
     private sealed record ContainingTypeModel(
         string ClassName,
-        bool IsValueType);
+        string Keyword);
 
     private enum CollectionKind
     {
@@ -511,7 +517,9 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         string Namespace,
         EquatableArray<ContainingTypeModel> ContainingTypes,
         string ClassName,
+        string Keyword,
         bool IsValueType,
+        bool IsRecord,
         bool IsSealed,
         bool GenerateOperators,
         bool DeepCollectionEquality,

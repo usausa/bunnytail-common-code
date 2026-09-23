@@ -58,6 +58,16 @@ public partial class DeepCloneIndexedData : IDeepCloneable<DeepCloneIndexedData>
     }
 }
 
+#pragma warning disable CA1002
+#pragma warning disable CA1819
+[GenerateDeepClone]
+public partial record DeepCloneRecordData(string Name, List<string> Tags) : IDeepCloneable<DeepCloneRecordData>;
+
+[GenerateDeepClone]
+public partial record struct DeepCloneRecordStructData(int[] Values) : IDeepCloneable<DeepCloneRecordStructData>;
+#pragma warning restore CA1819
+#pragma warning restore CA1002
+
 public class DeepCloneTests
 {
     [Fact]
@@ -210,5 +220,37 @@ public class DeepCloneTests
 
         // Assert
         Assert.Equal("t", clone.Title); // The indexer is excluded and only Title is cloned
+    }
+
+    [Fact]
+    public void WhenRecordTagsModifiedThenOriginalUnchanged()
+    {
+        // Arrange
+        var original = new DeepCloneRecordData("name", ["a", "b"]);
+        var clone = original.DeepClone();
+
+        // Act
+        clone.Tags.Add("c");
+
+        // Assert
+        Assert.NotSame(original, clone);
+        Assert.Equal("name", clone.Name);
+        Assert.Equal(2, original.Tags.Count);
+        Assert.Equal(3, clone.Tags.Count);
+    }
+
+    [Fact]
+    public void WhenRecordStructValuesModifiedThenOriginalUnchanged()
+    {
+        // Arrange
+        var original = new DeepCloneRecordStructData([1, 2]);
+        var clone = original.DeepClone();
+
+        // Act
+        clone.Values[0] = 99;
+
+        // Assert
+        Assert.Equal(1, original.Values[0]);
+        Assert.Equal(99, clone.Values[0]);
     }
 }

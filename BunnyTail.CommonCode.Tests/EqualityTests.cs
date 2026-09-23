@@ -122,6 +122,19 @@ internal sealed partial class EqualityNullableSetData
     public HashSet<string?> Set { get; init; } = [];
 }
 
+[GenerateEquality]
+public partial record EqualityRecordData(int Id, [property: IgnoreEquality] DateTime CapturedAt);
+
+public sealed record EqualityDerivedRecordData(int Id, DateTime CapturedAt, string Extra) : EqualityRecordData(Id, CapturedAt);
+
+#pragma warning disable CA1819
+[GenerateEquality(DeepCollectionEquality = true)]
+public sealed partial record EqualitySealedRecordData(string Name, int[] Items);
+#pragma warning restore CA1819
+
+[GenerateEquality]
+internal partial record struct EqualityRecordStructData(int X, [property: IgnoreEquality] int Ignored);
+
 public class EqualityTests
 {
     [Fact]
@@ -426,14 +439,14 @@ public class EqualityTests
     }
 
     [Fact]
-    public void RecordStructDataBuiltInEqualityPreserved()
+    public void WhenRecordStructSameValuesThenEquals()
     {
         // Arrange
         var a = new RecordStructData(5);
         var b = new RecordStructData(5);
         var c = new RecordStructData(6);
 
-        // Act & Assert — built-in record struct equality, generator emits nothing for records
+        // Act & Assert
         Assert.True(a == b);
         Assert.True(a.Equals(b));
         Assert.False(a == c);
@@ -448,5 +461,55 @@ public class EqualityTests
 
         // Act & Assert — IsCollectionType fix: IEnumerable<T> itself is recognised as collection
         Assert.True(a.Equals(b));
+    }
+
+    [Fact]
+    public void WhenRecordIgnoredPropertyDiffersThenEquals()
+    {
+        // Arrange
+        var a = new EqualityRecordData(1, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        var b = new EqualityRecordData(1, new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc));
+
+        // Act & Assert
+        Assert.True(a == b);
+        Assert.True(a.Equals(b));
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
+    public void WhenRecordComparedWithDerivedRecordThenNotEquals()
+    {
+        // Arrange
+        var time = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var a = new EqualityRecordData(1, time);
+        EqualityRecordData b = new EqualityDerivedRecordData(1, time, "extra");
+
+        // Act & Assert
+        Assert.False(a.Equals(b));
+        Assert.False(b.Equals(a));
+    }
+
+    [Fact]
+    public void WhenSealedRecordCollectionContentsSameThenEquals()
+    {
+        // Arrange
+        var a = new EqualitySealedRecordData("name", [1, 2]);
+        var b = new EqualitySealedRecordData("name", [1, 2]);
+
+        // Act & Assert
+        Assert.True(a == b);
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
+    public void WhenRecordStructIgnoredPropertyDiffersThenEquals()
+    {
+        // Arrange
+        var a = new EqualityRecordStructData(1, 2);
+        var b = new EqualityRecordStructData(1, 3);
+
+        // Act & Assert
+        Assert.True(a == b);
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
     }
 }

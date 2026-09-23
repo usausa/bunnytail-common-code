@@ -29,7 +29,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         var targetProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 GenerateAttributeName,
-                static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax,
+                static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax,
                 static (ctx, _) => GetTypeModel(ctx))
             .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : []);
 
@@ -66,15 +66,9 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
 
         var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name) ? string.Empty : symbol.ContainingNamespace.ToDisplayString();
 
-        var containingTypes = default(List<ContainingTypeModel>?);
-        var containingSymbol = symbol.ContainingType;
-        while (containingSymbol is not null)
-        {
-            containingTypes ??= [];
-            containingTypes.Add(new ContainingTypeModel(containingSymbol.GetClassName(), containingSymbol.IsValueType));
-            containingSymbol = containingSymbol.ContainingType;
-        }
-        containingTypes?.Reverse();
+        var containingTypes = symbol.GetContainingTypes()
+            .Select(static x => new ContainingTypeModel(x.GetClassName(), x.GetDeclarationKeyword()))
+            .ToArray();
 
         var properties = new List<PropertyModel>();
         var diagnostics = new List<DiagnosticInfo>();
@@ -121,9 +115,10 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         return new Result<TypeModel>(
             new TypeModel(
                 ns,
-                new EquatableArray<ContainingTypeModel>(containingTypes ?? []),
+                new EquatableArray<ContainingTypeModel>(containingTypes),
                 symbol.GetClassName(),
-                symbol.IsValueType,
+                symbol.GetDeclarationKeyword(),
+                symbol.IsRecord,
                 new EquatableArray<PropertyModel>(properties)),
             new EquatableArray<DiagnosticInfo>(diagnostics));
     }
@@ -200,7 +195,8 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         {
             builder.Indent()
                 .Append("partial ")
-                .Append(ct.IsValueType ? "struct " : "class ")
+                .Append(ct.Keyword)
+                .Append(" ")
                 .Append(ct.ClassName)
                 .NewLine();
             builder.BeginScope();
@@ -208,7 +204,8 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
 
         builder.Indent()
             .Append("partial ")
-            .Append(type.IsValueType ? "struct " : "class ")
+            .Append(type.Keyword)
+            .Append(" ")
             .Append(type.ClassName)
             .NewLine();
         builder.BeginScope();
@@ -221,12 +218,20 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
             .NewLine();
         builder.BeginScope();
 
-        builder.Indent().Append("var clone = new ").Append(type.ClassName);
+        builder.Indent().Append("var clone = ");
+        if (type.IsRecord)
+        {
+            builder.Append("this with");
+        }
+        else
+        {
+            builder.Append("new ").Append(type.ClassName);
+        }
 
         var hasInit = false;
         foreach (var prop in properties)
         {
-            if (!prop.RequiresInit)
+            if (!type.IsRecord && !prop.RequiresInit)
             {
                 continue;
             }
@@ -251,13 +256,13 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         }
         else
         {
-            builder.Append("();").NewLine();
+            builder.Append(type.IsRecord ? " { };" : "();").NewLine();
         }
 
         // Settable properties are set via assignment
         foreach (var prop in properties)
         {
-            if (prop.RequiresInit)
+            if (type.IsRecord || prop.RequiresInit)
             {
                 continue;
             }
@@ -359,7 +364,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
 
     private sealed record ContainingTypeModel(
         string ClassName,
-        bool IsValueType);
+        string Keyword);
 
     private sealed record PropertyModel(
         string Name,
@@ -372,6 +377,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         string Namespace,
         EquatableArray<ContainingTypeModel> ContainingTypes,
         string ClassName,
-        bool IsValueType,
+        string Keyword,
+        bool IsRecord,
         EquatableArray<PropertyModel> Properties);
 }

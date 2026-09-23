@@ -137,6 +137,13 @@ public partial class DelegateToManualPropertyFacade : IDelegateToManualProperty
     public int Value { get; set; }
 }
 
+[GenerateDelegateTo]
+public partial record DelegateToRecordService : IDelegateToSimpleService
+{
+    [DelegateTo]
+    private readonly DelegateToSimpleServiceCore inner = new();
+}
+
 public class DelegateToTests
 {
     [Fact]
@@ -277,5 +284,18 @@ public class DelegateToTests
 
         // If delegation were generated core.Value would also be 10, but because it is skipped for hand-written members core stays 0
         Assert.Equal("core:0", describe);
+    }
+
+    [Fact]
+    public void WhenRecordCountSetThenDelegatesToInner()
+    {
+        // Arrange
+        var svc = new DelegateToRecordService { Count = 3 };
+
+        // Act
+        var result = svc.GetMessage();
+
+        // Assert
+        Assert.Equal("Hello-3", result);
     }
 }

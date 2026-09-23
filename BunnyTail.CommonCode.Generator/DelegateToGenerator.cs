@@ -26,7 +26,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         var targetProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 GenerateAttributeName,
-                static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax,
+                static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax,
                 static (ctx, _) => GetTypeModel(ctx))
             .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : []);
 
@@ -55,15 +55,9 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
 
         var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name) ? string.Empty : symbol.ContainingNamespace.ToDisplayString();
 
-        var containingTypes = default(List<ContainingTypeModel>?);
-        var containingSymbol = symbol.ContainingType;
-        while (containingSymbol is not null)
-        {
-            containingTypes ??= [];
-            containingTypes.Add(new ContainingTypeModel(containingSymbol.GetClassName(), containingSymbol.IsValueType));
-            containingSymbol = containingSymbol.ContainingType;
-        }
-        containingTypes?.Reverse();
+        var containingTypes = symbol.GetContainingTypes()
+            .Select(static x => new ContainingTypeModel(x.GetClassName(), x.GetDeclarationKeyword()))
+            .ToArray();
 
         var delegateGroups = new List<GroupModel>();
         var diagnostics = new List<DiagnosticInfo>();
@@ -226,9 +220,9 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         return new Result<TypeModel>(
             new TypeModel(
                 ns,
-                new EquatableArray<ContainingTypeModel>(containingTypes ?? []),
+                new EquatableArray<ContainingTypeModel>(containingTypes),
                 symbol.GetClassName(),
-                symbol.IsValueType,
+                symbol.GetDeclarationKeyword(),
                 new EquatableArray<GroupModel>(delegateGroups)),
             new EquatableArray<DiagnosticInfo>(diagnostics));
     }
@@ -332,7 +326,8 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         {
             builder.Indent()
                 .Append("partial ")
-                .Append(ct.IsValueType ? "struct " : "class ")
+                .Append(ct.Keyword)
+                .Append(" ")
                 .Append(ct.ClassName)
                 .NewLine();
             builder.BeginScope();
@@ -340,7 +335,8 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
 
         builder.Indent()
             .Append("partial ")
-            .Append(type.IsValueType ? "struct " : "class ")
+            .Append(type.Keyword)
+            .Append(" ")
             .Append(type.ClassName)
             .NewLine();
         builder.BeginScope();
@@ -479,7 +475,7 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
 
     private sealed record ContainingTypeModel(
         string ClassName,
-        bool IsValueType);
+        string Keyword);
 
     private sealed record ParameterModel(
         string Name,
@@ -504,6 +500,6 @@ public sealed class DelegateToGenerator : IIncrementalGenerator
         string Namespace,
         EquatableArray<ContainingTypeModel> ContainingTypes,
         string ClassName,
-        bool IsValueType,
+        string Keyword,
         EquatableArray<GroupModel> Groups);
 }

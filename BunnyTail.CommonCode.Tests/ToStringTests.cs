@@ -234,6 +234,34 @@ public partial class ToStringFormatMaxLengthData
     public int Number { get; set; }
 }
 
+[GenerateToString]
+public partial record ToStringRecordData(int Id, string Name)
+{
+    [IgnoreToString]
+    public string Secret { get; init; } = default!;
+}
+
+[GenerateToString]
+public partial record struct ToStringRecordStructData(int X, [property: IgnoreToString] int Y);
+
+public partial record ToStringOuterRecord
+{
+    [GenerateToString]
+    public partial class InnerData
+    {
+        public int Id { get; set; }
+    }
+}
+
+public partial interface IToStringOuterInterface
+{
+    [GenerateToString]
+    internal sealed partial class InnerData
+    {
+        public int Id { get; set; }
+    }
+}
+
 public class ToStringTests
 {
     [Fact]
@@ -526,5 +554,57 @@ public class ToStringTests
         // Assert
         // Truncated after applying the format: 7 -> "000007" -> "000"
         Assert.Equal("ToStringFormatMaxLengthData { Number = 000 }", text);
+    }
+
+    [Fact]
+    public void TestRecord()
+    {
+        // Arrange
+        var data = new ToStringRecordData(1, "abc") { Secret = "secret" };
+
+        // Act
+        var text = data.ToString();
+
+        // Assert
+        Assert.Equal("ToStringRecordData { Id = 1, Name = abc }", text);
+    }
+
+    [Fact]
+    public void TestRecordStruct()
+    {
+        // Arrange
+        var data = new ToStringRecordStructData(1, 2);
+
+        // Act
+        var text = data.ToString();
+
+        // Assert
+        Assert.Equal("ToStringRecordStructData { X = 1 }", text);
+    }
+
+    [Fact]
+    public void TestInnerClassOfRecord()
+    {
+        // Arrange
+        var data = new ToStringOuterRecord.InnerData { Id = 1 };
+
+        // Act
+        var text = data.ToString();
+
+        // Assert
+        Assert.Equal("InnerData { Id = 1 }", text);
+    }
+
+    [Fact]
+    public void TestInnerClassOfInterface()
+    {
+        // Arrange
+        var data = new IToStringOuterInterface.InnerData { Id = 1 };
+
+        // Act
+        var text = data.ToString();
+
+        // Assert
+        Assert.Equal("InnerData { Id = 1 }", text);
     }
 }

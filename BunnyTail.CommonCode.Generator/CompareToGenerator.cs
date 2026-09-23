@@ -25,7 +25,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         var targetProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 GenerateAttributeName,
-                static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax,
+                static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax,
                 static (ctx, _) => GetTypeModel(ctx))
             .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : []);
 
@@ -54,15 +54,9 @@ public sealed class CompareToGenerator : IIncrementalGenerator
 
         var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name) ? string.Empty : symbol.ContainingNamespace.ToDisplayString();
 
-        var containingTypes = default(List<ContainingTypeModel>?);
-        var containingSymbol = symbol.ContainingType;
-        while (containingSymbol is not null)
-        {
-            containingTypes ??= [];
-            containingTypes.Add(new ContainingTypeModel(containingSymbol.GetClassName(), containingSymbol.IsValueType));
-            containingSymbol = containingSymbol.ContainingType;
-        }
-        containingTypes?.Reverse();
+        var containingTypes = symbol.GetContainingTypes()
+            .Select(static x => new ContainingTypeModel(x.GetClassName(), x.GetDeclarationKeyword()))
+            .ToArray();
 
         var attributes = symbol.GetAttributes().First(static x => x.AttributeClass?.ToDisplayString() == GenerateAttributeName);
         var generateOperators = GetBoolArg(attributes, nameof(TypeModel.GenerateOperators)) ?? true;
@@ -96,8 +90,9 @@ public sealed class CompareToGenerator : IIncrementalGenerator
 
         return Results.Success(new TypeModel(
             ns,
-            new EquatableArray<ContainingTypeModel>(containingTypes ?? []),
+            new EquatableArray<ContainingTypeModel>(containingTypes),
             symbol.GetClassName(),
+            symbol.GetDeclarationKeyword(),
             symbol.IsValueType,
             generateOperators,
             new EquatableArray<KeyModel>(keys.Select(static k => new KeyModel(k.Name, k.TypeName)))));
@@ -178,7 +173,8 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         {
             builder.Indent()
                 .Append("partial ")
-                .Append(ct.IsValueType ? "struct " : "class ")
+                .Append(ct.Keyword)
+                .Append(" ")
                 .Append(ct.ClassName)
                 .NewLine();
             builder.BeginScope();
@@ -186,7 +182,8 @@ public sealed class CompareToGenerator : IIncrementalGenerator
 
         builder.Indent()
             .Append("partial ")
-            .Append(type.IsValueType ? "struct " : "class ")
+            .Append(type.Keyword)
+            .Append(" ")
             .Append(type.ClassName)
             .Append(" : global::System.IComparable<")
             .Append(type.ClassName)
@@ -279,7 +276,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
 
     private sealed record ContainingTypeModel(
         string ClassName,
-        bool IsValueType);
+        string Keyword);
 
     private sealed record KeyModel(
         string Name,
@@ -289,6 +286,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         string Namespace,
         EquatableArray<ContainingTypeModel> ContainingTypes,
         string ClassName,
+        string Keyword,
         bool IsValueType,
         bool GenerateOperators,
         EquatableArray<KeyModel> Keys);

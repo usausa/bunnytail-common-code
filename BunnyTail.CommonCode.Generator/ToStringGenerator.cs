@@ -81,7 +81,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     }
 
     private static bool IsTypeSyntax(SyntaxNode node) =>
-        node is ClassDeclarationSyntax or StructDeclarationSyntax;
+        node is ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax;
 
     // ------------------------------------------------------------
     // Option
@@ -204,15 +204,9 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 
         var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name) ? string.Empty : symbol.ContainingNamespace.ToDisplayString();
 
-        var containingTypes = default(List<ContainingTypeModel>?);
-        var containingSymbol = symbol.ContainingType;
-        while (containingSymbol is not null)
-        {
-            containingTypes ??= [];
-            containingTypes.Add(new ContainingTypeModel(containingSymbol.GetClassName(), containingSymbol.IsValueType));
-            containingSymbol = containingSymbol.ContainingType;
-        }
-        containingTypes?.Reverse();
+        var containingTypes = symbol.GetContainingTypes()
+            .Select(static x => new ContainingTypeModel(x.GetClassName(), x.GetDeclarationKeyword()))
+            .ToArray();
 
         var diagnostics = new List<DiagnosticInfo>();
         var members = CollectMembers(symbol, diagnostics);
@@ -220,9 +214,9 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         return new Result<TypeModel>(
             new TypeModel(
                 ns,
-                new EquatableArray<ContainingTypeModel>(containingTypes ?? []),
+                new EquatableArray<ContainingTypeModel>(containingTypes),
                 symbol.GetClassName(),
-                symbol.IsValueType,
+                symbol.GetDeclarationKeyword(),
                 symbol.Name,
                 MakeFullName(symbol, ns),
                 new EquatableArray<string>(symbol.TypeParameters.Select(static x => x.Name)),
@@ -488,7 +482,8 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             builder
                 .Indent()
                 .Append("partial ")
-                .Append(containingType.IsValueType ? "struct " : "class ")
+                .Append(containingType.Keyword)
+                .Append(" ")
                 .Append(containingType.ClassName)
                 .NewLine();
             builder.BeginScope();
@@ -498,7 +493,8 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         builder
             .Indent()
             .Append("partial ")
-            .Append(type.IsValueType ? "struct " : "class ")
+            .Append(type.Keyword)
+            .Append(" ")
             .Append(type.ClassName)
             .NewLine();
         builder.BeginScope();
@@ -1164,23 +1160,10 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             buffer.Append('.');
         }
 
-        var names = default(List<string>?);
-        var containingSymbol = symbol.ContainingType;
-        while (containingSymbol is not null)
+        foreach (var containingType in symbol.GetContainingTypes())
         {
-            names ??= [];
-            names.Add(containingSymbol.Name);
-            containingSymbol = containingSymbol.ContainingType;
-        }
-
-        if (names is not null)
-        {
-            names.Reverse();
-            foreach (var name in names)
-            {
-                buffer.Append(name);
-                buffer.Append('.');
-            }
+            buffer.Append(containingType.Name);
+            buffer.Append('.');
         }
 
         buffer.Append(symbol.Name);
@@ -1271,7 +1254,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 
     private sealed record ContainingTypeModel(
         string ClassName,
-        bool IsValueType);
+        string Keyword);
 
     private sealed record MemberModel(
         string Name,
@@ -1288,7 +1271,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         string Namespace,
         EquatableArray<ContainingTypeModel> ContainingTypes,
         string ClassName,
-        bool IsValueType,
+        string Keyword,
         string SimpleName,
         string FullName,
         EquatableArray<string> TypeParameters,
