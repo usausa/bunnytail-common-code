@@ -2,11 +2,9 @@ namespace BunnyTail.CommonCode.Generator;
 
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 using SourceGenerateHelper;
@@ -26,29 +24,34 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         var targetProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 GenerateAttributeName,
-                static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax,
+                static (node, _) => IsTypeSyntax(node),
                 static (ctx, _) => GetTypeModel(ctx))
-            .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : []);
+            .Collect();
+        var treeProvider = context.ForAttributeWithMetadataNameSyntaxTrees(
+            GenerateAttributeName,
+            static (node, _) => IsTypeSyntax(node));
 
         context.RegisterSourceOutput(
-            targetProvider,
-            static (spc, result) => ReportDiagnostics(spc, result));
+            targetProvider.Combine(treeProvider),
+            static (spc, input) => spc.ReportDiagnostics(GeneratedTypes.SelectDiagnostics(input.Left, "GenerateEquality").Distinct(), input.Right));
 
         var models = targetProvider
-            .Where(static x => x.HasValue)
-            .Select(static (x, _) => x.Value)
+            .SelectMany(static (x, _) => GeneratedTypes.SelectTypes(x))
             .WithTrackingName("Models");
         context.RegisterImplementationSourceOutput(
             models,
             static (spc, type) => Execute(spc, type));
     }
 
+    private static bool IsTypeSyntax(SyntaxNode node) =>
+        node is ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax;
+
     private static Result<TypeModel> GetTypeModel(GeneratorAttributeSyntaxContext context)
     {
         var syntax = (TypeDeclarationSyntax)context.TargetNode;
         var symbol = (INamedTypeSymbol)context.TargetSymbol;
 
-        if (!syntax.Modifiers.Any(static x => x.IsKind(SyntaxKind.PartialKeyword)))
+        if (!GeneratedTypes.IsExtendable(syntax, symbol))
         {
             return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.EqualityInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
         }
@@ -59,63 +62,71 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             .Select(static x => new ContainingTypeModel(x.GetClassName(), x.GetDeclarationKeyword()))
             .ToArray();
 
-        var attr = symbol.GetAttributes().First(static x => x.AttributeClass?.ToDisplayString() == GenerateAttributeName);
+        var attr = context.Attributes[0];
 
         var generateOperators = GetBoolArg(attr, nameof(TypeModel.GenerateOperators)) ?? true;
         var deepCollectionEquality = GetBoolArg(attr, nameof(TypeModel.DeepCollectionEquality)) ?? false;
 
+        var compilation = context.SemanticModel.Compilation;
         var properties = new List<PropertyModel>();
-        var seenNames = new HashSet<string>(StringComparer.Ordinal);
-        var currentSymbol = symbol;
-        while (currentSymbol is not null)
+        var diagnostics = new List<DiagnosticInfo>();
+        foreach (var member in MemberCollector.GetInstanceMembers(symbol))
         {
-            foreach (var member in currentSymbol.GetMembers().OfType<IPropertySymbol>())
+            if ((member is not IPropertySymbol property) || (property.DeclaredAccessibility != Accessibility.Public))
             {
-                if (!seenNames.Add(member.Name))
-                {
-                    continue;
-                }
-
-                // Exclude indexers and non-public properties
-                if (member.IsIndexer || (member.DeclaredAccessibility != Accessibility.Public))
-                {
-                    continue;
-                }
-
-                if ((member.GetMethod is null) || member.IsWriteOnly)
-                {
-                    continue;
-                }
-
-                if (member.GetAttributes().Any(static x => x.AttributeClass?.ToDisplayString() == IgnoreAttributeName))
-                {
-                    continue;
-                }
-
-                properties.Add(new PropertyModel(
-                    member.Name,
-                    ClassifyCollection(member.Type),
-                    member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+                continue;
             }
-            currentSymbol = currentSymbol.BaseType;
+
+            if ((property.GetMethod is null) || !compilation.IsSymbolAccessibleWithin(property.GetMethod, symbol))
+            {
+                continue;
+            }
+
+            if (property.HasAttribute(IgnoreAttributeName))
+            {
+                continue;
+            }
+
+            if (property.Type.IsRefLikeType)
+            {
+                diagnostics.Add(new DiagnosticInfo(
+                    Diagnostics.EqualityRefStructMember,
+                    property.Locations.FirstOrDefault(static x => x.IsInSource) ?? syntax.Identifier.GetLocation(),
+                    property.Name,
+                    property.Type.ToDisplayString()));
+                continue;
+            }
+
+            properties.Add(new PropertyModel(
+                property.Name,
+                ClassifyCollection(property.Type),
+                property.Type.ToDisplayString(SymbolDisplayFormats.FullyQualifiedNullable)));
         }
 
         if (properties.Count == 0)
         {
-            return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.EqualityNoProperties, syntax.Identifier.GetLocation(), symbol.Name));
+            return diagnostics.Count > 0
+                ? Results.Errors<TypeModel>(diagnostics)
+                : Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.EqualityNoProperties, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
-        return Results.Success(new TypeModel(
-            ns,
-            new EquatableArray<ContainingTypeModel>(containingTypes),
-            symbol.GetClassName(),
-            symbol.GetDeclarationKeyword(),
-            symbol.IsValueType,
-            symbol.IsRecord,
-            symbol.IsSealed,
-            generateOperators,
-            deepCollectionEquality,
-            new EquatableArray<PropertyModel>(properties)));
+        var className = symbol.GetClassName();
+        return new Result<TypeModel>(
+            new TypeModel(
+                ns,
+                new EquatableArray<ContainingTypeModel>(containingTypes),
+                className,
+                symbol.GetDeclarationKeyword(),
+                symbol.IsValueType,
+                symbol.IsRefLikeType,
+                symbol.IsRecord,
+                symbol.IsSealed,
+                generateOperators,
+                deepCollectionEquality,
+                new EquatableArray<PropertyModel>(properties),
+                HintNameBuilder.Build(ns, [.. containingTypes.Select(static x => x.ClassName), className, "Equality"]),
+                symbol.ToDisplayString()),
+            new EquatableArray<DiagnosticInfo>(diagnostics));
     }
 
     private static bool? GetBoolArg(AttributeData attr, string name)
@@ -154,16 +165,17 @@ public sealed class EqualityGenerator : IIncrementalGenerator
                 continue;
             }
 
-            switch (named.ConstructedFrom.ToDisplayString())
+            if (named.HasFullyQualifiedMetadataName("System.Collections.Generic.ISet`1") ||
+                named.HasFullyQualifiedMetadataName("System.Collections.Generic.IReadOnlySet`1") ||
+                named.HasFullyQualifiedMetadataName("System.Collections.Generic.IDictionary`2") ||
+                named.HasFullyQualifiedMetadataName("System.Collections.Generic.IReadOnlyDictionary`2"))
             {
-                case "System.Collections.Generic.ISet<T>":
-                case "System.Collections.Generic.IReadOnlySet<T>":
-                case "System.Collections.Generic.IDictionary<TKey, TValue>":
-                case "System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>":
-                    return CollectionKind.Unordered;
-                case "System.Collections.Generic.IEnumerable<T>":
-                    isEnumerable = true;
-                    break;
+                return CollectionKind.Unordered;
+            }
+
+            if (named.HasFullyQualifiedMetadataName("System.Collections.Generic.IEnumerable`1"))
+            {
+                isEnumerable = true;
             }
         }
 
@@ -179,14 +191,6 @@ public sealed class EqualityGenerator : IIncrementalGenerator
     // Generator
     // ------------------------------------------------------------
 
-    private static void ReportDiagnostics(SourceProductionContext context, Result<TypeModel> result)
-    {
-        foreach (var info in result.Diagnostics)
-        {
-            context.ReportDiagnostic(info);
-        }
-    }
-
     private static void Execute(SourceProductionContext context, TypeModel type)
     {
         context.CancellationToken.ThrowIfCancellationRequested();
@@ -194,9 +198,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         var builder = new SourceBuilder();
         BuildSource(builder, type);
 
-        context.AddSource(
-            HintNameBuilder.Build(type.Namespace, [.. type.ContainingTypes.Select(static x => x.ClassName), type.ClassName, "Equality"]),
-            builder);
+        context.AddSource(type.HintName, builder);
     }
 
     private static void BuildSource(SourceBuilder builder, TypeModel type)
@@ -206,6 +208,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
 
         builder.AutoGenerated();
         builder.EnableNullable();
+        builder.Disable("CS0612, CS0618");
         builder.NewLine();
 
         if (!String.IsNullOrEmpty(type.Namespace))
@@ -230,7 +233,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             .Append(type.Keyword)
             .Append(" ")
             .Append(type.ClassName);
-        if (!type.IsRecord)
+        if (!type.IsRecord && !type.IsRefLike)
         {
             builder
                 .Append(" : global::System.IEquatable<")
@@ -242,7 +245,12 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         builder.BeginScope();
 
         // Equals(object?)
-        if (!type.IsRecord)
+        if (type.IsRefLike)
+        {
+            builder.Indent().Append("public override bool Equals(object? obj) => false;").NewLine();
+            builder.NewLine();
+        }
+        else if (!type.IsRecord)
         {
             builder.Indent()
                 .Append("public override bool Equals(object? obj) => obj is ")
@@ -291,13 +299,14 @@ public sealed class EqualityGenerator : IIncrementalGenerator
                 builder.Indent().Append("    ");
             }
 
+            var name = CSharpIdentifier.Escape(prop.Name);
             if ((prop.Collection != CollectionKind.None) && type.DeepCollectionEquality)
             {
                 builder
-                    .Append(prop.Collection == CollectionKind.Unordered ? "UnorderedEqualOrBothNull(this." : "SequenceEqualOrBothNull(this.")
-                    .Append(prop.Name)
+                    .Append(prop.Collection == CollectionKind.Unordered ? "__UnorderedEqualOrBothNull(this." : "__SequenceEqualOrBothNull(this.")
+                    .Append(name)
                     .Append(", other.")
-                    .Append(prop.Name)
+                    .Append(name)
                     .Append(")");
             }
             else
@@ -306,9 +315,9 @@ public sealed class EqualityGenerator : IIncrementalGenerator
                     .Append("global::System.Collections.Generic.EqualityComparer<")
                     .Append(prop.TypeName)
                     .Append(">.Default.Equals(this.")
-                    .Append(prop.Name)
+                    .Append(name)
                     .Append(", other.")
-                    .Append(prop.Name)
+                    .Append(name)
                     .Append(")");
             }
 
@@ -328,11 +337,12 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         builder.Indent().Append("var hash = new global::System.HashCode();").NewLine();
         foreach (var prop in properties)
         {
+            var name = CSharpIdentifier.Escape(prop.Name);
             if ((prop.Collection == CollectionKind.Sequence) && type.DeepCollectionEquality)
             {
-                builder.Indent().Append("if (this.").Append(prop.Name).Append(" is not null)").NewLine();
+                builder.Indent().Append("if (this.").Append(name).Append(" is not null)").NewLine();
                 builder.BeginScope();
-                builder.Indent().Append("foreach (var item in this.").Append(prop.Name).Append(")").NewLine();
+                builder.Indent().Append("foreach (var item in this.").Append(name).Append(")").NewLine();
                 builder.BeginScope();
                 builder.Indent().Append("hash.Add(item);").NewLine();
                 builder.EndScope();
@@ -340,14 +350,14 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             }
             else if ((prop.Collection == CollectionKind.Unordered) && type.DeepCollectionEquality)
             {
-                builder.Indent().Append("if (this.").Append(prop.Name).Append(" is not null)").NewLine();
+                builder.Indent().Append("if (this.").Append(name).Append(" is not null)").NewLine();
                 builder.BeginScope();
-                builder.Indent().Append("hash.Add(UnorderedHash(this.").Append(prop.Name).Append("));").NewLine();
+                builder.Indent().Append("hash.Add(__UnorderedHash(this.").Append(name).Append("));").NewLine();
                 builder.EndScope();
             }
             else
             {
-                builder.Indent().Append("hash.Add(this.").Append(prop.Name).Append(");").NewLine();
+                builder.Indent().Append("hash.Add(this.").Append(name).Append(");").NewLine();
             }
         }
         builder.Indent().Append("return hash.ToHashCode();").NewLine();
@@ -403,13 +413,13 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         {
             builder.NewLine();
             builder.Indent()
-                .Append("private static bool SequenceEqualOrBothNull<T>(")
+                .Append("private static bool __SequenceEqualOrBothNull<__T>(")
                 .NewLine();
             builder.Indent()
-                .Append("    global::System.Collections.Generic.IEnumerable<T>? a,")
+                .Append("    global::System.Collections.Generic.IEnumerable<__T>? a,")
                 .NewLine();
             builder.Indent()
-                .Append("    global::System.Collections.Generic.IEnumerable<T>? b)")
+                .Append("    global::System.Collections.Generic.IEnumerable<__T>? b)")
                 .NewLine();
             builder.BeginScope();
             builder.Indent().Append("if (a is null)").NewLine();
@@ -431,13 +441,13 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             // Comparison helpers
             builder.NewLine();
             builder.Indent()
-                .Append("private static bool UnorderedEqualOrBothNull<T>(")
+                .Append("private static bool __UnorderedEqualOrBothNull<__T>(")
                 .NewLine();
             builder.Indent()
-                .Append("    global::System.Collections.Generic.IEnumerable<T>? a,")
+                .Append("    global::System.Collections.Generic.IEnumerable<__T>? a,")
                 .NewLine();
             builder.Indent()
-                .Append("    global::System.Collections.Generic.IEnumerable<T>? b)")
+                .Append("    global::System.Collections.Generic.IEnumerable<__T>? b)")
                 .NewLine();
             builder.BeginScope();
             builder.Indent().Append("if (a is null)").NewLine();
@@ -450,7 +460,7 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             builder.EndScope();
 
             // Unordered comparison
-            builder.Indent().Append("var counts = new global::System.Collections.Generic.Dictionary<global::System.ValueTuple<T>, int>();").NewLine();
+            builder.Indent().Append("var counts = new global::System.Collections.Generic.Dictionary<global::System.ValueTuple<__T>, int>();").NewLine();
             builder.Indent().Append("var balance = 0;").NewLine();
             builder.Indent().Append("foreach (var item in a)").NewLine();
             builder.BeginScope();
@@ -473,13 +483,13 @@ public sealed class EqualityGenerator : IIncrementalGenerator
             // Unordered hash helper
             builder.NewLine();
             builder.Indent()
-                .Append("private static int UnorderedHash<T>(global::System.Collections.Generic.IEnumerable<T> source)")
+                .Append("private static int __UnorderedHash<__T>(global::System.Collections.Generic.IEnumerable<__T> source)")
                 .NewLine();
             builder.BeginScope();
             builder.Indent().Append("var hash = 0;").NewLine();
             builder.Indent().Append("foreach (var item in source)").NewLine();
             builder.BeginScope();
-            builder.Indent().Append("hash = unchecked(hash + (item is null ? 0 : global::System.Collections.Generic.EqualityComparer<T>.Default.GetHashCode(item)));").NewLine();
+            builder.Indent().Append("hash = unchecked(hash + (item is null ? 0 : global::System.Collections.Generic.EqualityComparer<__T>.Default.GetHashCode(item)));").NewLine();
             builder.EndScope();
             builder.Indent().Append("return hash;").NewLine();
             builder.EndScope();
@@ -519,9 +529,12 @@ public sealed class EqualityGenerator : IIncrementalGenerator
         string ClassName,
         string Keyword,
         bool IsValueType,
+        bool IsRefLike,
         bool IsRecord,
         bool IsSealed,
         bool GenerateOperators,
         bool DeepCollectionEquality,
-        EquatableArray<PropertyModel> Properties);
+        EquatableArray<PropertyModel> Properties,
+        string HintName,
+        string DisplayName) : IGeneratedType;
 }

@@ -20,7 +20,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     private const string IgnoreAttributeName = "BunnyTail.CommonCode.IgnoreToStringAttribute";
     private const string FormatAttributeName = "BunnyTail.CommonCode.ToStringFormatAttribute";
 
-    private const string GenericEnumerableName = "System.Collections.Generic.IEnumerable<T>";
+    private const string GenericEnumerableName = "System.Collections.Generic.IEnumerable`1";
 
     private const string OptionPrefix = "CommonCodeGeneratorToString";
 
@@ -28,8 +28,8 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 
     private const char MaskKeepChar = '#';
 
-    private const string TypeNameCacheField = "GeneratedToStringPrefix";
-    private const string TypeNameFormatMethod = "GeneratedToStringFormatTypeName";
+    private const string TypeNameCacheField = "__ToStringPrefix";
+    private const string TypeNameFormatMethod = "__FormatTypeName";
 
     private static readonly string[] PrimitiveTypeNames =
     [
@@ -59,22 +59,34 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         var optionProvider = context.AnalyzerConfigOptionsProvider
             .Select(static (provider, _) => GetOptions(provider));
 
+        context.RegisterSourceOutput(
+            optionProvider,
+            static (spc, option) => spc.ReportDiagnostics(option.Diagnostics));
+
+        var allowUnsafeProvider = context.CompilationProvider
+            .Select(static (compilation, _) => compilation.Options is CSharpCompilationOptions { AllowUnsafe: true });
+        var generateOptionProvider = optionProvider
+            .Combine(allowUnsafeProvider)
+            .Select(static (x, _) => x.Left.Value with { SkipLocalsInit = x.Left.Value.SkipLocalsInit && x.Right });
+
         var targetProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 GenerateAttributeName,
                 static (node, _) => IsTypeSyntax(node),
                 static (context, _) => GetTypeModel(context))
-            .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : []);
+            .Collect();
+        var treeProvider = context.ForAttributeWithMetadataNameSyntaxTrees(
+            GenerateAttributeName,
+            static (node, _) => IsTypeSyntax(node));
 
         context.RegisterSourceOutput(
-            targetProvider,
-            static (spc, result) => ReportDiagnostics(spc, result));
+            targetProvider.Combine(optionProvider).Combine(treeProvider),
+            static (spc, input) => spc.ReportDiagnostics(SelectDiagnostics(input.Left.Left, input.Left.Right.Value), input.Right));
 
         var models = targetProvider
-            .Where(static x => x.HasValue)
-            .Select(static (x, _) => x.Value)
+            .SelectMany(static (x, _) => GeneratedTypes.SelectTypes(x))
             .WithTrackingName("Models")
-            .Combine(optionProvider);
+            .Combine(generateOptionProvider);
         context.RegisterImplementationSourceOutput(
             models,
             static (spc, pair) => Execute(spc, pair.Right, pair.Left));
@@ -83,39 +95,50 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     private static bool IsTypeSyntax(SyntaxNode node) =>
         node is ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax;
 
+    private static IEnumerable<DiagnosticInfo> SelectDiagnostics(ImmutableArray<Result<TypeModel>> results, OptionModel options) =>
+        GeneratedTypes.SelectDiagnostics(results, "GenerateToString")
+            .Concat(results.SelectValue()
+                .SelectMany(static x => x.Members)
+                .Where(x => (x.RefStructDiagnostic is not null) && (!x.IsField || (options.Members == MemberKindOption.PropertyAndField)))
+                .Select(static x => x.RefStructDiagnostic!))
+            .Distinct();
+
     // ------------------------------------------------------------
     // Option
     // ------------------------------------------------------------
 
-    private static OptionModel GetOptions(AnalyzerConfigOptionsProvider provider)
+    private static Result<OptionModel> GetOptions(AnalyzerConfigOptionsProvider provider)
     {
         var options = provider.GlobalOptions;
+        var diagnostics = new List<DiagnosticInfo>();
 
-        var typeName = GetEnumOption(options, "TypeName", TypeNameOption.Simple);
-        var typeArgument = GetEnumOption(options, "TypeArgument", TypeArgumentOption.Include);
-        var nullMode = GetEnumOption(options, "Null", NullOption.Literal);
+        var typeName = GetEnumOption(options, "TypeName", TypeNameOption.Simple, diagnostics);
+        var typeArgument = GetEnumOption(options, "TypeArgument", TypeArgumentOption.Include, diagnostics);
+        var nullMode = GetEnumOption(options, "Null", NullOption.Literal, diagnostics);
         var nullLiteral = GetStringOption(options, "NullLiteral", "null");
-        var collection = GetEnumOption(options, "Collection", CollectionOption.Expand);
-        var collectionLimit = GetIntOption(options, "CollectionLimit", -1);
-        var members = GetEnumOption(options, "Members", MemberKindOption.Property);
-        var innerSpace = GetEnumOption(options, "InnerSpace", SpaceOption.Space);
-        var typeNameSpace = GetEnumOption(options, "TypeNameSpace", SpaceOption.Space);
+        var collection = GetEnumOption(options, "Collection", CollectionOption.Expand, diagnostics);
+        var collectionLimit = GetIntOption(options, "CollectionLimit", -1, diagnostics);
+        var members = GetEnumOption(options, "Members", MemberKindOption.Property, diagnostics);
+        var innerSpace = GetEnumOption(options, "InnerSpace", SpaceOption.Space, diagnostics);
+        var typeNameSpace = GetEnumOption(options, "TypeNameSpace", SpaceOption.Space, diagnostics);
         var separator = GetStringOption(options, "Separator", ", ");
         var assign = GetStringOption(options, "Assign", " = ");
-        var collectionInnerSpace = GetEnumOption(options, "CollectionInnerSpace", SpaceOption.None);
+        var collectionInnerSpace = GetEnumOption(options, "CollectionInnerSpace", SpaceOption.None, diagnostics);
         var collectionSeparator = GetStringOption(options, "CollectionSeparator", ", ");
 
-        var bracket = GetEnumOption(options, "Bracket", BracketOption.Brace);
+        var bracket = GetEnumOption(options, "Bracket", BracketOption.Brace, diagnostics);
         var openBracket = ResolveBracket(bracket, GetStringOption(options, "OpenBracket", string.Empty), true);
         var closeBracket = ResolveBracket(bracket, GetStringOption(options, "CloseBracket", string.Empty), false);
         var hasBracket = (openBracket.Length > 0) || (closeBracket.Length > 0);
 
-        var collectionBracket = GetEnumOption(options, "CollectionBracket", BracketOption.Square);
+        var collectionBracket = GetEnumOption(options, "CollectionBracket", BracketOption.Square, diagnostics);
         var collectionOpenBracket = ResolveBracket(collectionBracket, GetStringOption(options, "CollectionOpenBracket", string.Empty), true);
         var collectionCloseBracket = ResolveBracket(collectionBracket, GetStringOption(options, "CollectionCloseBracket", string.Empty), false);
         var hasCollectionBracket = (collectionOpenBracket.Length > 0) || (collectionCloseBracket.Length > 0);
 
-        return new OptionModel(
+        var skipLocalsInit = GetBoolOption(options, "SkipLocalsInit", true, diagnostics);
+
+        var model = new OptionModel(
             typeName,
             typeArgument,
             nullMode,
@@ -133,7 +156,8 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             collectionCloseBracket,
             hasCollectionBracket ? ResolveSpace(collectionInnerSpace) : string.Empty,
             collectionSeparator,
-            GetBoolOption(options, "SkipLocalsInit", false));
+            skipLocalsInit);
+        return new Result<OptionModel>(model, new EquatableArray<DiagnosticInfo>(diagnostics));
     }
 
     private static string ResolveBracket(BracketOption bracket, string value, bool open)
@@ -156,11 +180,22 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     private static string ResolveSpace(SpaceOption space) =>
         space == SpaceOption.Space ? " " : string.Empty;
 
-    private static T GetEnumOption<T>(AnalyzerConfigOptions options, string name, T defaultValue)
+    private static T GetEnumOption<T>(AnalyzerConfigOptions options, string name, T defaultValue, List<DiagnosticInfo> diagnostics)
         where T : struct, Enum
     {
         var value = options.GetValue<string?>(OptionPrefix + name);
-        return !String.IsNullOrEmpty(value) && Enum.TryParse<T>(value, true, out var result) ? result : defaultValue;
+        if (String.IsNullOrEmpty(value))
+        {
+            return defaultValue;
+        }
+
+        if (Enum.TryParse<T>(value, true, out var result) && Enum.IsDefined(typeof(T), result))
+        {
+            return result;
+        }
+
+        AddInvalidValue(diagnostics, name, value!);
+        return defaultValue;
     }
 
     private static string GetStringOption(AnalyzerConfigOptions options, string name, string defaultValue)
@@ -169,19 +204,42 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         return String.IsNullOrEmpty(value) ? defaultValue : value!;
     }
 
-    private static bool GetBoolOption(AnalyzerConfigOptions options, string name, bool defaultValue)
+    private static bool GetBoolOption(AnalyzerConfigOptions options, string name, bool defaultValue, List<DiagnosticInfo> diagnostics)
     {
         var value = options.GetValue<string?>(OptionPrefix + name);
-        return !String.IsNullOrEmpty(value) && Boolean.TryParse(value, out var result) ? result : defaultValue;
+        if (String.IsNullOrEmpty(value))
+        {
+            return defaultValue;
+        }
+
+        if (Boolean.TryParse(value, out var result))
+        {
+            return result;
+        }
+
+        AddInvalidValue(diagnostics, name, value!);
+        return defaultValue;
     }
 
-    private static int GetIntOption(AnalyzerConfigOptions options, string name, int defaultValue)
+    private static int GetIntOption(AnalyzerConfigOptions options, string name, int defaultValue, List<DiagnosticInfo> diagnostics)
     {
         var value = options.GetValue<string?>(OptionPrefix + name);
-        return !String.IsNullOrEmpty(value) && Int32.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result) && (result != 0)
-            ? result
-            : defaultValue;
+        if (String.IsNullOrEmpty(value))
+        {
+            return defaultValue;
+        }
+
+        if (Int32.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result))
+        {
+            return result != 0 ? result : defaultValue;
+        }
+
+        AddInvalidValue(diagnostics, name, value!);
+        return defaultValue;
     }
+
+    private static void AddInvalidValue(List<DiagnosticInfo> diagnostics, string name, string value) =>
+        diagnostics.Add(new DiagnosticInfo(Diagnostics.InvalidPropertyValue, (Location?)null, OptionPrefix + name, value));
 
     private static string? Unquote(string? value) =>
         (value is not null) && (value.Length >= 2) && (value[0] == '"') && (value[value.Length - 1] == '"')
@@ -197,9 +255,14 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         var syntax = (TypeDeclarationSyntax)context.TargetNode;
         var symbol = (INamedTypeSymbol)context.TargetSymbol;
 
-        if (!syntax.Modifiers.Any(static x => x.IsKind(SyntaxKind.PartialKeyword)))
+        if (!GeneratedTypes.IsExtendable(syntax, symbol))
         {
             return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.InvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
+        }
+
+        if (FindSealedToString(symbol) is { } sealedType)
+        {
+            return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.ToStringSealed, syntax.Identifier.GetLocation(), symbol.Name, sealedType.Name));
         }
 
         var ns = String.IsNullOrEmpty(symbol.ContainingNamespace.Name) ? string.Empty : symbol.ContainingNamespace.ToDisplayString();
@@ -209,116 +272,80 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             .ToArray();
 
         var diagnostics = new List<DiagnosticInfo>();
-        var members = CollectMembers(symbol, diagnostics);
+        var members = CollectMembers(symbol, context.SemanticModel.Compilation, syntax.Identifier.GetLocation(), diagnostics);
 
+        var className = symbol.GetClassName();
         return new Result<TypeModel>(
             new TypeModel(
                 ns,
                 new EquatableArray<ContainingTypeModel>(containingTypes),
-                symbol.GetClassName(),
+                className,
                 symbol.GetDeclarationKeyword(),
                 symbol.Name,
                 MakeFullName(symbol, ns),
                 new EquatableArray<string>(symbol.TypeParameters.Select(static x => x.Name)),
-                new EquatableArray<MemberModel>(members)),
+                new EquatableArray<MemberModel>(members),
+                HintNameBuilder.Build(ns, [.. containingTypes.Select(static x => x.ClassName), className]),
+                symbol.ToDisplayString()),
             new EquatableArray<DiagnosticInfo>(diagnostics));
     }
 
-    private static List<MemberModel> CollectMembers(INamedTypeSymbol symbol, List<DiagnosticInfo> diagnostics)
+    private static INamedTypeSymbol? FindSealedToString(INamedTypeSymbol symbol)
     {
-        var levels = new List<List<MemberModel>>();
-        var seenNames = new HashSet<string>(StringComparer.Ordinal);
-        var currentSymbol = symbol;
-        while (currentSymbol is not null)
+        for (var current = symbol.BaseType; current is not null; current = current.BaseType)
         {
-            var members = new List<MemberModel>();
-            foreach (var member in currentSymbol.GetMembers())
+            foreach (var member in current.GetMembers("ToString"))
             {
-                // Static members are excluded
-                if (member.IsStatic)
+                if (member is IMethodSymbol { IsOverride: true, Parameters.Length: 0 } method)
+                {
+                    return method.IsSealed ? current : null;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static List<MemberModel> CollectMembers(INamedTypeSymbol symbol, Compilation compilation, Location typeLocation, List<DiagnosticInfo> diagnostics)
+    {
+        // Base type members are output first, same as record
+        var result = new List<MemberModel>();
+        foreach (var member in MemberCollector.GetInstanceMembers(symbol))
+        {
+            if (HasIgnore(member))
+            {
+                ReportFormatOnIgnored(diagnostics, member);
+                continue;
+            }
+
+            if (member.DeclaredAccessibility != Accessibility.Public)
+            {
+                continue;
+            }
+
+            if (member is IPropertySymbol property)
+            {
+                if ((property.GetMethod is null) || !compilation.IsSymbolAccessibleWithin(property.GetMethod, symbol))
                 {
                     continue;
                 }
 
-                if (member is IPropertySymbol property)
-                {
-                    // Indexers are excluded
-                    if (property.IsIndexer)
-                    {
-                        continue;
-                    }
-
-                    // Skip duplicate property names (hides base property)
-                    if (!seenNames.Add(property.Name))
-                    {
-                        continue;
-                    }
-
-                    if (HasIgnore(property))
-                    {
-                        ReportFormatOnIgnored(diagnostics, property);
-                        continue;
-                    }
-
-                    if ((property.DeclaredAccessibility != Accessibility.Public) ||
-                        (property.GetMethod is null) ||
-                        property.IsWriteOnly)
-                    {
-                        continue;
-                    }
-
-                    members.Add(GetMemberModel(property, property.Type, false, diagnostics));
-                }
-                else if (member is IFieldSymbol field)
-                {
-                    // Compiler generated fields are excluded
-                    if (field.IsImplicitlyDeclared || (field.AssociatedSymbol is not null))
-                    {
-                        continue;
-                    }
-
-                    // Skip duplicate field names (hides base field)
-                    if (!seenNames.Add(field.Name))
-                    {
-                        continue;
-                    }
-
-                    if (HasIgnore(field))
-                    {
-                        ReportFormatOnIgnored(diagnostics, field);
-                        continue;
-                    }
-
-                    if (field.DeclaredAccessibility != Accessibility.Public)
-                    {
-                        continue;
-                    }
-
-                    members.Add(GetMemberModel(field, field.Type, true, diagnostics));
-                }
+                result.Add(GetMemberModel(property, property.Type, false, typeLocation, diagnostics));
             }
-
-            levels.Add(members);
-            currentSymbol = currentSymbol.BaseType;
-        }
-
-        // Base type members are output first, same as record
-        levels.Reverse();
-
-        var result = new List<MemberModel>();
-        foreach (var level in levels)
-        {
-            result.AddRange(level);
+            else if (member is IFieldSymbol field)
+            {
+                result.Add(GetMemberModel(field, field.Type, true, typeLocation, diagnostics));
+            }
         }
 
         return result;
     }
 
     private static bool HasIgnore(ISymbol symbol) =>
-        symbol.GetAttributes().Any(static x => x.AttributeClass?.ToDisplayString() == IgnoreAttributeName);
+        symbol.HasAttribute(IgnoreAttributeName);
 
     private static AttributeData? GetFormatAttribute(ISymbol symbol) =>
-        symbol.GetAttributes().FirstOrDefault(static x => x.AttributeClass?.ToDisplayString() == FormatAttributeName);
+        symbol.FindAttribute(FormatAttributeName);
 
     private static Location? GetSourceLocation(ISymbol symbol) =>
         symbol.Locations.FirstOrDefault(static x => x.IsInSource);
@@ -337,9 +364,13 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         }
     }
 
-    private static MemberModel GetMemberModel(ISymbol symbol, ITypeSymbol type, bool isField, List<DiagnosticInfo> diagnostics)
+    private static MemberModel GetMemberModel(ISymbol symbol, ITypeSymbol type, bool isField, Location typeLocation, List<DiagnosticInfo> diagnostics)
     {
         var (hasElements, isNullAssignable, isElementNullAssignable) = GetMemberType(type);
+
+        var refStructDiagnostic = type.IsRefLikeType && !IsCharSpan(type)
+            ? new DiagnosticInfo(Diagnostics.ToStringRefStructMember, GetSourceLocation(symbol) ?? typeLocation, symbol.Name, type.ToDisplayString())
+            : null;
 
         var format = default(string?);
         var maskPattern = default(string?);
@@ -402,34 +433,36 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             format,
             maxLength,
             maskChar,
-            maskPattern);
+            maskPattern,
+            refStructDiagnostic);
     }
+
+    private static bool IsCharSpan(ITypeSymbol type) =>
+        (type is INamedTypeSymbol { TypeArguments.Length: 1 } named) &&
+        (named.TypeArguments[0].SpecialType == SpecialType.System_Char) &&
+        (type.HasFullyQualifiedMetadataName("System.Span`1") || type.HasFullyQualifiedMetadataName("System.ReadOnlySpan`1"));
 
     private static (bool HasElements, bool IsNullAssignable, bool IsElementNullAssignable) GetMemberType(ITypeSymbol typeSymbol)
     {
-        var isNullAssignable = typeSymbol.IsReferenceType || typeSymbol.IsGenericType();
+        var isNullAssignable = typeSymbol.CanBeNull();
 
         if (!typeSymbol.SpecialType.Equals(SpecialType.System_String))
         {
             if (typeSymbol is IArrayTypeSymbol arrayTypeSymbol)
             {
-                var elementType = arrayTypeSymbol.ElementType;
-                return (true, isNullAssignable, elementType.IsReferenceType || elementType.IsGenericType());
+                return (true, isNullAssignable, arrayTypeSymbol.ElementType.CanBeNull());
             }
 
-            if ((typeSymbol is INamedTypeSymbol { IsGenericType: true } namedTypeSymbol) &&
-                (namedTypeSymbol.ConstructedFrom.ToDisplayString() == GenericEnumerableName))
+            if (typeSymbol.HasFullyQualifiedMetadataName(GenericEnumerableName))
             {
-                var elementType = namedTypeSymbol.TypeArguments[0];
-                return (true, isNullAssignable, elementType.IsReferenceType || elementType.IsGenericType());
+                return (true, isNullAssignable, ((INamedTypeSymbol)typeSymbol).TypeArguments[0].CanBeNull());
             }
 
             foreach (var iface in typeSymbol.AllInterfaces)
             {
-                if (iface.IsGenericType && (iface.ConstructedFrom.ToDisplayString() == GenericEnumerableName))
+                if (iface.HasFullyQualifiedMetadataName(GenericEnumerableName))
                 {
-                    var elementType = iface.TypeArguments[0];
-                    return (true, isNullAssignable, elementType.IsReferenceType || elementType.IsGenericType());
+                    return (true, isNullAssignable, iface.TypeArguments[0].CanBeNull());
                 }
             }
         }
@@ -441,14 +474,6 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     // Generator
     // ------------------------------------------------------------
 
-    private static void ReportDiagnostics(SourceProductionContext context, Result<TypeModel> result)
-    {
-        foreach (var info in result.Diagnostics)
-        {
-            context.ReportDiagnostic(info);
-        }
-    }
-
     private static void Execute(SourceProductionContext context, OptionModel options, TypeModel type)
     {
         context.CancellationToken.ThrowIfCancellationRequested();
@@ -456,9 +481,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         var builder = new SourceBuilder();
         BuildSource(builder, options, type);
 
-        context.AddSource(
-            HintNameBuilder.Build(type.Namespace, [.. type.ContainingTypes.Select(static x => x.ClassName), type.ClassName]),
-            builder);
+        context.AddSource(type.HintName, builder);
     }
 
     private static void BuildSource(SourceBuilder builder, OptionModel options, TypeModel type)
@@ -467,6 +490,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 
         builder.AutoGenerated();
         builder.EnableNullable();
+        builder.Disable("CS0612, CS0618");
         builder.NewLine();
 
         // Namespace
@@ -517,7 +541,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         // ReSharper disable once LoopCanBeConvertedToQuery
         foreach (var member in type.Members)
         {
-            if (member.IsField && (options.Members != MemberKindOption.PropertyAndField))
+            if ((member.IsField && (options.Members != MemberKindOption.PropertyAndField)) || (member.RefStructDiagnostic is not null))
             {
                 continue;
             }
@@ -733,7 +757,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             builder
                 .Indent()
                 .Append("if (this.")
-                .Append(member.Name)
+                .Append(CSharpIdentifier.Escape(member.Name))
                 .Append(" is not null)")
                 .NewLine();
             builder.BeginScope();
@@ -764,7 +788,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             builder
                 .Indent()
                 .Append("if (this.")
-                .Append(member.Name)
+                .Append(CSharpIdentifier.Escape(member.Name))
                 .Append(" is not null)")
                 .NewLine();
             builder.BeginScope();
@@ -810,7 +834,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         builder
             .Indent()
             .Append("foreach (var item in this.")
-            .Append(member.Name)
+            .Append(CSharpIdentifier.Escape(member.Name))
             .Append(")")
             .NewLine();
         builder.BeginScope();
@@ -886,7 +910,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
             .Indent()
             .Append("handler.AppendFormatted(")
             .Append("this.")
-            .Append(member.Name);
+            .Append(CSharpIdentifier.Escape(member.Name));
         if (!String.IsNullOrEmpty(member.Format))
         {
             builder
@@ -957,7 +981,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
                 return;
             }
 
-            builder.Indent().Append("if (this.").Append(member.Name).Append(" is not null)").NewLine();
+            builder.Indent().Append("if (this.").Append(CSharpIdentifier.Escape(member.Name)).Append(" is not null)").NewLine();
             builder.BeginScope();
             BuildAppendLiteral(builder, shortText);
             builder.EndScope();
@@ -1070,16 +1094,17 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 
     private static void BuildValueLocal(SourceBuilder builder, MemberModel member)
     {
+        var name = CSharpIdentifier.Escape(member.Name);
         builder.Indent().Append("var value = ");
         if (!String.IsNullOrEmpty(member.Format))
         {
             builder
                 .Append("this.")
-                .Append(member.Name)
+                .Append(name)
                 .Append(" is global::System.IFormattable formattable ? formattable.ToString(\"")
                 .Append(EscapeString(member.Format!))
                 .Append("\", null) : this.")
-                .Append(member.Name)
+                .Append(name)
                 .Append(member.IsNullAssignable ? "?.ToString();" : ".ToString();")
                 .NewLine();
         }
@@ -1087,7 +1112,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         {
             builder
                 .Append("this.")
-                .Append(member.Name)
+                .Append(name)
                 .Append(member.IsNullAssignable ? "?.ToString();" : ".ToString();")
                 .NewLine();
         }
@@ -1139,16 +1164,17 @@ public sealed class ToStringGenerator : IIncrementalGenerator
     private static string Truncate(string value, int length) =>
         value.Length > length ? value.Substring(0, length) : value;
 
-    private static string EscapeString(string value) =>
-        value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    private static string EscapeString(string value)
+    {
+        var literal = CSharpLiteral.Format(value);
+        return literal.Substring(1, literal.Length - 2);
+    }
 
-    private static string EscapeChar(char value) =>
-        value switch
-        {
-            '\\' => "\\\\",
-            '\'' => "\\'",
-            _ => value.ToString()
-        };
+    private static string EscapeChar(char value)
+    {
+        var literal = CSharpLiteral.Format(value);
+        return literal.Substring(1, literal.Length - 2);
+    }
 
     private static string MakeFullName(INamedTypeSymbol symbol, string ns)
     {
@@ -1265,7 +1291,8 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         string? Format,
         int MaxLength,
         char MaskChar,
-        string? MaskPattern);
+        string? MaskPattern,
+        DiagnosticInfo? RefStructDiagnostic);
 
     private sealed record TypeModel(
         string Namespace,
@@ -1275,5 +1302,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
         string SimpleName,
         string FullName,
         EquatableArray<string> TypeParameters,
-        EquatableArray<MemberModel> Members);
+        EquatableArray<MemberModel> Members,
+        string HintName,
+        string DisplayName) : IGeneratedType;
 }
