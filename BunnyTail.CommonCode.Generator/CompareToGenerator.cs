@@ -1,11 +1,9 @@
 namespace BunnyTail.CommonCode.Generator;
 
 using System;
-using System.Collections.Immutable;
 using System.Linq;
 
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 using SourceGenerateHelper;
@@ -25,29 +23,34 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         var targetProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 GenerateAttributeName,
-                static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax,
+                static (node, _) => IsTypeSyntax(node),
                 static (ctx, _) => GetTypeModel(ctx))
-            .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : []);
+            .Collect();
+        var treeProvider = context.ForAttributeWithMetadataNameSyntaxTrees(
+            GenerateAttributeName,
+            static (node, _) => IsTypeSyntax(node));
 
         context.RegisterSourceOutput(
-            targetProvider,
-            static (spc, result) => ReportDiagnostics(spc, result));
+            targetProvider.Combine(treeProvider),
+            static (spc, input) => spc.ReportDiagnostics(GeneratedTypes.SelectDiagnostics(input.Left, "GenerateCompareTo").Distinct(), input.Right));
 
         var models = targetProvider
-            .Where(static x => x.HasValue)
-            .Select(static (x, _) => x.Value)
+            .SelectMany(static (x, _) => GeneratedTypes.SelectTypes(x))
             .WithTrackingName("Models");
         context.RegisterImplementationSourceOutput(
             models,
             static (spc, type) => Execute(spc, type));
     }
 
+    private static bool IsTypeSyntax(SyntaxNode node) =>
+        node is ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax;
+
     private static Result<TypeModel> GetTypeModel(GeneratorAttributeSyntaxContext context)
     {
         var syntax = (TypeDeclarationSyntax)context.TargetNode;
         var symbol = (INamedTypeSymbol)context.TargetSymbol;
 
-        if (!syntax.Modifiers.Any(static x => x.IsKind(SyntaxKind.PartialKeyword)))
+        if (!GeneratedTypes.IsExtendable(syntax, symbol))
         {
             return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.CompareToInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
         }
@@ -58,44 +61,109 @@ public sealed class CompareToGenerator : IIncrementalGenerator
             .Select(static x => new ContainingTypeModel(x.GetClassName(), x.GetDeclarationKeyword()))
             .ToArray();
 
-        var attributes = symbol.GetAttributes().First(static x => x.AttributeClass?.ToDisplayString() == GenerateAttributeName);
-        var generateOperators = GetBoolArg(attributes, nameof(TypeModel.GenerateOperators)) ?? true;
+        var generateOperators = GetBoolArg(context.Attributes[0], nameof(TypeModel.GenerateOperators)) ?? true;
 
+        var compilation = context.SemanticModel.Compilation;
         var keys = new List<(int Order, string Name, string TypeName)>();
+        var diagnostics = new List<DiagnosticInfo>();
         // ReSharper disable once LoopCanBeConvertedToQuery
-        foreach (var member in symbol.GetMembers().OfType<IPropertySymbol>())
+        foreach (var member in MemberCollector.GetInstanceMembers(symbol))
         {
-            // Exclude indexers and non-public properties
-            if (member.IsIndexer || (member.DeclaredAccessibility != Accessibility.Public))
+            // Exclude non-public members
+            if (member.DeclaredAccessibility != Accessibility.Public)
             {
                 continue;
             }
 
-            var keyAttr = member.GetAttributes().FirstOrDefault(static x => x.AttributeClass?.ToDisplayString() == CompareKeyAttributeName);
+            var keyAttr = member.FindAttribute(CompareKeyAttributeName);
             if (keyAttr is null)
             {
                 continue;
             }
 
+            var type = member switch
+            {
+                IPropertySymbol { GetMethod: not null } property when compilation.IsSymbolAccessibleWithin(property.GetMethod, symbol) => property.Type,
+                IFieldSymbol field => field.Type,
+                _ => null
+            };
+            if (type is null)
+            {
+                continue;
+            }
+
+            if (!IsComparable(type, compilation))
+            {
+                diagnostics.Add(new DiagnosticInfo(
+                    Diagnostics.CompareToKeyNotComparable,
+                    member.Locations.FirstOrDefault(static x => x.IsInSource) ?? syntax.Identifier.GetLocation(),
+                    member.Name,
+                    type.ToDisplayString()));
+                continue;
+            }
+
             var order = GetIntArg(keyAttr, "Order") ?? 0;
-            keys.Add((order, member.Name, member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+            keys.Add((order, member.Name, type.ToDisplayString(SymbolDisplayFormats.FullyQualifiedNullable)));
         }
 
         if (keys.Count == 0)
         {
-            return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.CompareToNoKeys, syntax.Identifier.GetLocation(), symbol.Name));
+            return diagnostics.Count > 0
+                ? Results.Errors<TypeModel>(diagnostics)
+                : Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.CompareToNoKeys, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
-        keys.Sort(static (a, b) => a.Order.CompareTo(b.Order));
+        var className = symbol.GetClassName();
+        return new Result<TypeModel>(
+            new TypeModel(
+                ns,
+                new EquatableArray<ContainingTypeModel>(containingTypes),
+                className,
+                symbol.GetDeclarationKeyword(),
+                symbol.IsValueType,
+                symbol.IsRefLikeType,
+                generateOperators,
+                new EquatableArray<KeyModel>(keys.OrderBy(static k => k.Order).Select(static k => new KeyModel(k.Name, k.TypeName))),
+                HintNameBuilder.Build(ns, [.. containingTypes.Select(static x => x.ClassName), className, "CompareTo"]),
+                symbol.ToDisplayString()),
+            new EquatableArray<DiagnosticInfo>(diagnostics));
+    }
 
-        return Results.Success(new TypeModel(
-            ns,
-            new EquatableArray<ContainingTypeModel>(containingTypes),
-            symbol.GetClassName(),
-            symbol.GetDeclarationKeyword(),
-            symbol.IsValueType,
-            generateOperators,
-            new EquatableArray<KeyModel>(keys.Select(static k => new KeyModel(k.Name, k.TypeName)))));
+    private static bool IsComparable(ITypeSymbol type, Compilation compilation)
+    {
+        if (type.IsRefLikeType || (type.TypeKind is TypeKind.Pointer or TypeKind.FunctionPointer))
+        {
+            return false;
+        }
+
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+        {
+            type = nullable.TypeArguments[0];
+        }
+
+        if ((type.TypeKind == TypeKind.TypeParameter) || (!type.IsValueType && !type.IsSealed && (type.TypeKind != TypeKind.Array)))
+        {
+            return true;
+        }
+
+        foreach (var iface in type.AllInterfaces)
+        {
+            if (iface.HasFullyQualifiedMetadataName("System.IComparable"))
+            {
+                return true;
+            }
+
+            if (iface.HasFullyQualifiedMetadataName("System.IComparable`1"))
+            {
+                var conversion = compilation.ClassifyCommonConversion(type, iface.TypeArguments[0]);
+                if (conversion.IsIdentity || (conversion.IsImplicit && conversion.IsReference))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static bool? GetBoolArg(AttributeData attr, string name)
@@ -134,14 +202,6 @@ public sealed class CompareToGenerator : IIncrementalGenerator
     // Generator
     // ------------------------------------------------------------
 
-    private static void ReportDiagnostics(SourceProductionContext context, Result<TypeModel> result)
-    {
-        foreach (var info in result.Diagnostics)
-        {
-            context.ReportDiagnostic(info);
-        }
-    }
-
     private static void Execute(SourceProductionContext context, TypeModel type)
     {
         context.CancellationToken.ThrowIfCancellationRequested();
@@ -149,9 +209,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         var builder = new SourceBuilder();
         BuildSource(builder, type);
 
-        context.AddSource(
-            HintNameBuilder.Build(type.Namespace, [.. type.ContainingTypes.Select(static x => x.ClassName), type.ClassName, "CompareTo"]),
-            builder);
+        context.AddSource(type.HintName, builder);
     }
 
     private static void BuildSource(SourceBuilder builder, TypeModel type)
@@ -161,6 +219,7 @@ public sealed class CompareToGenerator : IIncrementalGenerator
 
         builder.AutoGenerated();
         builder.EnableNullable();
+        builder.Disable("CS0612, CS0618");
         builder.NewLine();
 
         if (!String.IsNullOrEmpty(type.Namespace))
@@ -184,11 +243,16 @@ public sealed class CompareToGenerator : IIncrementalGenerator
             .Append("partial ")
             .Append(type.Keyword)
             .Append(" ")
-            .Append(type.ClassName)
-            .Append(" : global::System.IComparable<")
-            .Append(type.ClassName)
-            .Append(">")
-            .NewLine();
+            .Append(type.ClassName);
+        if (!type.IsRefLike)
+        {
+            builder
+                .Append(" : global::System.IComparable<")
+                .Append(type.ClassName)
+                .Append(">");
+        }
+
+        builder.NewLine();
         builder.BeginScope();
 
         // CompareTo(T) for value types, CompareTo(T?) for reference types
@@ -210,13 +274,14 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         builder.Indent().Append("int result;").NewLine();
         foreach (var key in keys)
         {
+            var name = CSharpIdentifier.Escape(key.Name);
             builder.Indent()
                 .Append("result = global::System.Collections.Generic.Comparer<")
                 .Append(key.TypeName)
                 .Append(">.Default.Compare(this.")
-                .Append(key.Name)
+                .Append(name)
                 .Append(", other.")
-                .Append(key.Name)
+                .Append(name)
                 .Append(");")
                 .NewLine();
             builder.Indent().Append("if (result != 0)").NewLine();
@@ -288,6 +353,9 @@ public sealed class CompareToGenerator : IIncrementalGenerator
         string ClassName,
         string Keyword,
         bool IsValueType,
+        bool IsRefLike,
         bool GenerateOperators,
-        EquatableArray<KeyModel> Keys);
+        EquatableArray<KeyModel> Keys,
+        string HintName,
+        string DisplayName) : IGeneratedType;
 }

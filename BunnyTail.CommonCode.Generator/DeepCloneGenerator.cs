@@ -1,11 +1,9 @@
 namespace BunnyTail.CommonCode.Generator;
 
 using System;
-using System.Collections.Immutable;
 using System.Linq;
 
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 using SourceGenerateHelper;
@@ -17,7 +15,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
     private const string GenerateAttributeName = "BunnyTail.CommonCode.GenerateDeepCloneAttribute";
     private const string ShallowCloneAttributeName = "BunnyTail.CommonCode.ShallowCloneAttribute";
     private const string IgnoreCloneAttributeName = "BunnyTail.CommonCode.IgnoreCloneAttribute";
-    private const string IDeepCloneableName = "BunnyTail.CommonCode.IDeepCloneable<T>";
+    private const string IDeepCloneableName = "BunnyTail.CommonCode.IDeepCloneable`1";
     // ReSharper restore InconsistentNaming
 
     // ------------------------------------------------------------
@@ -29,36 +27,45 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         var targetProvider = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 GenerateAttributeName,
-                static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax,
+                static (node, _) => IsTypeSyntax(node),
                 static (ctx, _) => GetTypeModel(ctx))
-            .SelectMany(static (x, _) => x is not null ? ImmutableArray.Create(x) : []);
+            .Collect();
+        var treeProvider = context.ForAttributeWithMetadataNameSyntaxTrees(
+            GenerateAttributeName,
+            static (node, _) => IsTypeSyntax(node));
 
         context.RegisterSourceOutput(
-            targetProvider,
-            static (spc, result) => ReportDiagnostics(spc, result));
+            targetProvider.Combine(treeProvider),
+            static (spc, input) => spc.ReportDiagnostics(GeneratedTypes.SelectDiagnostics(input.Left, "GenerateDeepClone").Distinct(), input.Right));
 
         var models = targetProvider
-            .Where(static x => x.HasValue)
-            .Select(static (x, _) => x.Value)
+            .SelectMany(static (x, _) => GeneratedTypes.SelectTypes(x))
             .WithTrackingName("Models");
         context.RegisterImplementationSourceOutput(
             models,
             static (spc, type) => Execute(spc, type));
     }
 
+    private static bool IsTypeSyntax(SyntaxNode node) =>
+        node is ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax;
+
     private static Result<TypeModel> GetTypeModel(GeneratorAttributeSyntaxContext context)
     {
         var syntax = (TypeDeclarationSyntax)context.TargetNode;
         var symbol = (INamedTypeSymbol)context.TargetSymbol;
 
-        if (!syntax.Modifiers.Any(static x => x.IsKind(SyntaxKind.PartialKeyword)))
+        if (!GeneratedTypes.IsExtendable(syntax, symbol))
         {
             return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.DeepCloneInvalidTypeDefinition, syntax.Identifier.GetLocation(), symbol.Name));
         }
 
+        if (symbol.IsRefLikeType)
+        {
+            return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.DeepCloneRefStruct, syntax.Identifier.GetLocation(), symbol.Name));
+        }
+
         // Check whether IDeepCloneable<T> is implemented
-        var implementsDeepCloneable = symbol.AllInterfaces.Any(static x =>
-            x.IsGenericType && (x.ConstructedFrom.ToDisplayString() == IDeepCloneableName));
+        var implementsDeepCloneable = symbol.AllInterfaces.Any(static x => x.HasFullyQualifiedMetadataName(IDeepCloneableName));
         if (!implementsDeepCloneable)
         {
             return Results.Error<TypeModel>(new DiagnosticInfo(Diagnostics.DeepCloneNotImplementIDeepCloneable, syntax.Identifier.GetLocation(), symbol.Name));
@@ -70,67 +77,90 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
             .Select(static x => new ContainingTypeModel(x.GetClassName(), x.GetDeclarationKeyword()))
             .ToArray();
 
+        var compilation = context.SemanticModel.Compilation;
         var properties = new List<PropertyModel>();
         var diagnostics = new List<DiagnosticInfo>();
-        foreach (var member in symbol.GetMembers().OfType<IPropertySymbol>())
+        foreach (var member in MemberCollector.GetInstanceMembers(symbol))
         {
-            // Exclude indexers and non-public properties
-            if (member.IsIndexer || (member.DeclaredAccessibility != Accessibility.Public))
+            // Exclude fields and non-public properties
+            if ((member is not IPropertySymbol property) || (property.DeclaredAccessibility != Accessibility.Public))
             {
                 continue;
             }
 
-            if ((member.GetMethod is null) || (member.SetMethod is null))
+            if ((property.GetMethod is null) || !compilation.IsSymbolAccessibleWithin(property.GetMethod, symbol))
             {
                 continue;
             }
 
-            if (member.GetAttributes().Any(static x => x.AttributeClass?.ToDisplayString() == IgnoreCloneAttributeName))
+            if (property.HasAttribute(IgnoreCloneAttributeName))
             {
                 continue;
             }
 
-            var shallow = member.GetAttributes().Any(static x => x.AttributeClass?.ToDisplayString() == ShallowCloneAttributeName);
-            var cloneStrategy = shallow ? CloneStrategy.Shallow : GetCloneStrategy(member.Type);
+            var shallow = property.HasAttribute(ShallowCloneAttributeName);
+            var typeName = property.Type.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString(SymbolDisplayFormats.FullyQualifiedNullable);
+            var canBeNull = property.Type.CanBeNull();
+
+            if ((property.SetMethod is null) || !compilation.IsSymbolAccessibleWithin(property.SetMethod, symbol))
+            {
+                if (!shallow && !symbol.IsRecord && IsList(property.Type))
+                {
+                    properties.Add(new PropertyModel(property.Name, typeName, CloneStrategy.List, canBeNull, false, true));
+                }
+
+                continue;
+            }
+
+            var cloneStrategy = shallow ? CloneStrategy.Shallow : GetCloneStrategy(property.Type, compilation);
 
             if (!shallow && (cloneStrategy == CloneStrategy.Unknown))
             {
                 // Reference types with no known deep-clone method fall back to a shallow copy, but notify the user via a diagnostic
-                diagnostics.Add(new DiagnosticInfo(
-                    Diagnostics.DeepClonePropertyMissingDeepClone,
-                    member.Locations.FirstOrDefault() ?? syntax.GetLocation(),
-                    member.Name,
-                    member.Type.ToDisplayString()));
+                if (SymbolEqualityComparer.Default.Equals(property.ContainingType, symbol))
+                {
+                    diagnostics.Add(new DiagnosticInfo(
+                        Diagnostics.DeepClonePropertyMissingDeepClone,
+                        property.Locations.FirstOrDefault() ?? syntax.GetLocation(),
+                        property.Name,
+                        property.Type.ToDisplayString()));
+                }
+
                 cloneStrategy = CloneStrategy.Shallow;
             }
 
             properties.Add(new PropertyModel(
-                member.Name,
-                member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                property.Name,
+                typeName,
                 cloneStrategy,
-                member.Type.IsReferenceType,
-                member.SetMethod.IsInitOnly));
+                canBeNull,
+                property.SetMethod.IsInitOnly || property.IsRequired,
+                false));
         }
 
+        var className = symbol.GetClassName();
         return new Result<TypeModel>(
             new TypeModel(
                 ns,
                 new EquatableArray<ContainingTypeModel>(containingTypes),
-                symbol.GetClassName(),
+                className,
                 symbol.GetDeclarationKeyword(),
                 symbol.IsRecord,
-                new EquatableArray<PropertyModel>(properties)),
+                GetMethodModifier(symbol),
+                new EquatableArray<PropertyModel>(properties),
+                HintNameBuilder.Build(ns, [.. containingTypes.Select(static x => x.ClassName), className, "DeepClone"]),
+                symbol.ToDisplayString()),
             new EquatableArray<DiagnosticInfo>(diagnostics));
     }
 
-    private static CloneStrategy GetCloneStrategy(ITypeSymbol typeSymbol)
+    private static CloneStrategy GetCloneStrategy(ITypeSymbol typeSymbol, Compilation compilation)
     {
         if (typeSymbol.IsValueType || (typeSymbol.SpecialType == SpecialType.System_String))
         {
             return CloneStrategy.Direct;
         }
 
-        if (typeSymbol.AllInterfaces.Any(static x => x.IsGenericType && (x.ConstructedFrom.ToDisplayString() == IDeepCloneableName)))
+        if (IsDeepCloneable(typeSymbol, compilation))
         {
             return CloneStrategy.DeepClone;
         }
@@ -140,29 +170,58 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
             return CloneStrategy.Array;
         }
 
-        if (typeSymbol is INamedTypeSymbol named)
+        if (IsList(typeSymbol))
         {
-            var fullName = named.ConstructedFrom.ToDisplayString();
-            if (fullName == "System.Collections.Generic.List<T>")
-            {
-                return CloneStrategy.List;
-            }
+            return CloneStrategy.List;
         }
 
         return CloneStrategy.Unknown;
     }
 
+    private static bool IsDeepCloneable(ITypeSymbol type, Compilation compilation) =>
+        GetInterfaces(type).Any(x => x.HasFullyQualifiedMetadataName(IDeepCloneableName) &&
+                                     compilation.ClassifyCommonConversion(x.TypeArguments[0], type).IsImplicit);
+
+    private static IEnumerable<INamedTypeSymbol> GetInterfaces(ITypeSymbol type) =>
+        type switch
+        {
+            ITypeParameterSymbol typeParameter => typeParameter.ConstraintTypes.SelectMany(GetInterfaces),
+            INamedTypeSymbol { TypeKind: TypeKind.Interface } named => named.AllInterfaces.Add(named),
+            _ => type.AllInterfaces
+        };
+
+    private static bool IsList(ITypeSymbol type) =>
+        type.HasFullyQualifiedMetadataName("System.Collections.Generic.List`1");
+
+    private static string GetMethodModifier(INamedTypeSymbol symbol)
+    {
+        if (symbol.IsValueType)
+        {
+            return string.Empty;
+        }
+
+        for (var current = symbol.BaseType; current is not null; current = current.BaseType)
+        {
+            var existing = current.GetMembers("DeepClone")
+                .OfType<IMethodSymbol>()
+                .FirstOrDefault(static x => !x.IsStatic && (x.Arity == 0) && (x.Parameters.Length == 0) && (x.DeclaredAccessibility != Accessibility.Private));
+            if (existing is not null)
+            {
+                return (existing.IsVirtual || existing.IsOverride || existing.IsAbstract) && !existing.IsSealed ? "override " : "new ";
+            }
+
+            if (current.HasAttribute(GenerateAttributeName))
+            {
+                return "override ";
+            }
+        }
+
+        return symbol.IsSealed ? string.Empty : "virtual ";
+    }
+
     // ------------------------------------------------------------
     // Generator
     // ------------------------------------------------------------
-
-    private static void ReportDiagnostics(SourceProductionContext context, Result<TypeModel> result)
-    {
-        foreach (var info in result.Diagnostics)
-        {
-            context.ReportDiagnostic(info);
-        }
-    }
 
     private static void Execute(SourceProductionContext context, TypeModel type)
     {
@@ -171,9 +230,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         var builder = new SourceBuilder();
         BuildSource(builder, type);
 
-        context.AddSource(
-            HintNameBuilder.Build(type.Namespace, [.. type.ContainingTypes.Select(static x => x.ClassName), type.ClassName, "DeepClone"]),
-            builder);
+        context.AddSource(type.HintName, builder);
     }
 
     private static void BuildSource(SourceBuilder builder, TypeModel type)
@@ -183,6 +240,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
 
         builder.AutoGenerated();
         builder.EnableNullable();
+        builder.Disable("CS0612, CS0618");
         builder.NewLine();
 
         if (!String.IsNullOrEmpty(type.Namespace))
@@ -213,6 +271,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         // DeepClone()
         builder.Indent()
             .Append("public ")
+            .Append(type.Modifier)
             .Append(type.ClassName)
             .Append(" DeepClone()")
             .NewLine();
@@ -244,7 +303,7 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
                 hasInit = true;
             }
 
-            builder.Indent().Append(prop.Name).Append(" = ");
+            builder.Indent().Append(CSharpIdentifier.Escape(prop.Name)).Append(" = ");
             BuildCloneExpression(builder, prop);
             builder.Append(",").NewLine();
         }
@@ -262,14 +321,24 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         // Settable properties are set via assignment
         foreach (var prop in properties)
         {
-            if (type.IsRecord || prop.RequiresInit)
+            if (type.IsRecord || prop.RequiresInit || prop.IsReadOnly)
             {
                 continue;
             }
 
-            builder.Indent().Append("clone.").Append(prop.Name).Append(" = ");
+            builder.Indent().Append("clone.").Append(CSharpIdentifier.Escape(prop.Name)).Append(" = ");
             BuildCloneExpression(builder, prop);
             builder.Append(";").NewLine();
+        }
+
+        foreach (var prop in properties.Where(static x => x.IsReadOnly))
+        {
+            var name = CSharpIdentifier.Escape(prop.Name);
+            builder.Indent().Append("if ((this.").Append(name).Append(" is not null) && (clone.").Append(name).Append(" is not null))").NewLine();
+            builder.BeginScope();
+            builder.Indent().Append("clone.").Append(name).Append(".Clear();").NewLine();
+            builder.Indent().Append("clone.").Append(name).Append(".AddRange(this.").Append(name).Append(");").NewLine();
+            builder.EndScope();
         }
 
         builder.Indent().Append("return clone;").NewLine();
@@ -286,30 +355,31 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
 
     private static void BuildCloneExpression(SourceBuilder builder, PropertyModel prop)
     {
+        var name = CSharpIdentifier.Escape(prop.Name);
         switch (prop.Strategy)
         {
             case CloneStrategy.DeepClone:
-                if (prop.IsReferenceType)
+                if (prop.CanBeNull)
                 {
                     builder
-                        .Append("this.").Append(prop.Name)
-                        .Append(" is null ? null! : this.").Append(prop.Name).Append(".DeepClone()");
+                        .Append("this.").Append(name)
+                        .Append(" is null ? default! : this.").Append(name).Append(".DeepClone()");
                 }
                 else
                 {
-                    builder.Append("this.").Append(prop.Name).Append(".DeepClone()");
+                    builder.Append("this.").Append(name).Append(".DeepClone()");
                 }
                 break;
 
             case CloneStrategy.Array:
-                if (prop.IsReferenceType)
+                if (prop.CanBeNull)
                 {
                     builder
-                        .Append("this.").Append(prop.Name)
-                        .Append(" is null ? null! : (")
+                        .Append("this.").Append(name)
+                        .Append(" is null ? default! : (")
                         .Append(prop.TypeName)
                         .Append(")((global::System.Array)this.")
-                        .Append(prop.Name)
+                        .Append(name)
                         .Append(").Clone()");
                 }
                 else
@@ -318,32 +388,32 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
                         .Append("(")
                         .Append(prop.TypeName)
                         .Append(")((global::System.Array)this.")
-                        .Append(prop.Name)
+                        .Append(name)
                         .Append(").Clone()");
                 }
                 break;
 
             case CloneStrategy.List:
-                if (prop.IsReferenceType)
+                if (prop.CanBeNull)
                 {
                     builder
-                        .Append("this.").Append(prop.Name)
-                        .Append(" is null ? null! : new ")
+                        .Append("this.").Append(name)
+                        .Append(" is null ? default! : new ")
                         .Append(prop.TypeName)
-                        .Append("(this.").Append(prop.Name).Append(")");
+                        .Append("(this.").Append(name).Append(")");
                 }
                 else
                 {
                     builder
                         .Append("new ").Append(prop.TypeName)
-                        .Append("(this.").Append(prop.Name).Append(")");
+                        .Append("(this.").Append(name).Append(")");
                 }
                 break;
 
             case CloneStrategy.Direct:
             case CloneStrategy.Shallow:
             default:
-                builder.Append("this.").Append(prop.Name);
+                builder.Append("this.").Append(name);
                 break;
         }
     }
@@ -370,8 +440,9 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         string Name,
         string TypeName,
         CloneStrategy Strategy,
-        bool IsReferenceType,
-        bool RequiresInit);
+        bool CanBeNull,
+        bool RequiresInit,
+        bool IsReadOnly);
 
     private sealed record TypeModel(
         string Namespace,
@@ -379,5 +450,8 @@ public sealed class DeepCloneGenerator : IIncrementalGenerator
         string ClassName,
         string Keyword,
         bool IsRecord,
-        EquatableArray<PropertyModel> Properties);
+        string Modifier,
+        EquatableArray<PropertyModel> Properties,
+        string HintName,
+        string DisplayName) : IGeneratedType;
 }

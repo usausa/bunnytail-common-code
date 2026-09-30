@@ -1,9 +1,5 @@
 <Project>
 
-  <PropertyGroup>
-    <CommonCodeGeneratorToStringSkipLocalsInit Condition="'$(CommonCodeGeneratorToStringSkipLocalsInit)' == ''">true</CommonCodeGeneratorToStringSkipLocalsInit>
-  </PropertyGroup>
-
   <PropertyGroup Condition="'$(CommonCodeGeneratorToStringSkipLocalsInit)' == 'true'">
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>

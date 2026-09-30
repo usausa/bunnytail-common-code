@@ -1,5 +1,8 @@
 namespace BunnyTail.CommonCode;
 
+using System.Reflection;
+using System.Runtime.CompilerServices;
+
 // Individual MSBuild options are set for this project, see the csproj for the values
 
 #pragma warning disable CA1819
@@ -129,5 +132,19 @@ public class ToStringOptionsTests
         // Assert
         // The containing types are included in the full type name
         Assert.Equal("BunnyTail.CommonCode.OptionOuterData.InnerData<<Id:1)", text);
+    }
+
+    [Fact]
+    public void TestSkipLocalsInit()
+    {
+        // Arrange
+        var method = typeof(OptionData).GetMethod(nameof(ToString), Type.EmptyTypes)!;
+
+        // Act
+        var attribute = method.GetCustomAttribute<SkipLocalsInitAttribute>();
+
+        // Assert
+        // SkipLocalsInit is on by default, and the package allows unsafe code for it
+        Assert.NotNull(attribute);
     }
 }

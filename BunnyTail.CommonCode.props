@@ -1,2 +1,7 @@
 <Project>
+
+  <PropertyGroup>
+    <CommonCodeGeneratorToStringSkipLocalsInit Condition="'$(CommonCodeGeneratorToStringSkipLocalsInit)' == ''">true</CommonCodeGeneratorToStringSkipLocalsInit>
+  </PropertyGroup>
+
 </Project>

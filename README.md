@@ -33,7 +33,7 @@ var str = data.ToString();
 Assert.Equal("Data { Id = 123, Name = null, Values = [1, 2] }", str);
 ```
 
-Public properties are written, static members and indexers are excluded, and base type members come first. A member hidden with `new` is written once.
+Public properties are written, static members and indexers are excluded, and base type members come first. A base member hidden by a derived member of the same name (also a static one) is not written.
 
 For a generic type the runtime type arguments are written, so `Data<T>` produces `Data<int> { ... }`.
 
@@ -219,7 +219,7 @@ public sealed partial class TaggedData
 | `GenerateOperators` | `true` | Emit `==` and `!=` operators |
 | `DeepCollectionEquality` | `false` | Compare collection properties by content instead of by reference |
 
-Equality and hash code are computed from all reachable public properties, including those inherited from base types (flattened). `base.Equals` / `base.GetHashCode` are not called.
+Equality and hash code are computed from all reachable public instance properties, including those inherited from base types (flattened). `base.Equals` / `base.GetHashCode` are not called.
 
 When `DeepCollectionEquality` is enabled, ordered collections (arrays, `List<T>`, other `IEnumerable<T>`) are compared in order (`SequenceEqual`), while `ISet<T>` and `IDictionary<TKey, TValue>` are compared without regard to enumeration order, and their hash codes are order-independent.
 
@@ -233,7 +233,7 @@ Assert.True(a.Equals(b)); // UpdatedAt is ignored
 
 ## CompareTo
 
-Generates `IComparable<T>` and relational operators using properties marked with `[CompareKey]`.
+Generates `IComparable<T>` and relational operators using public instance properties and fields marked with `[CompareKey]`, including those of base types.
 
 ### Source
 
@@ -300,7 +300,7 @@ public partial class AuthorData : IDeepCloneable<AuthorData>
 | Type | Strategy |
 |---|---|
 | Value type / `string` | Direct copy |
-| `IDeepCloneable<T>` | `.DeepClone()` |
+| `IDeepCloneable<T>` whose `T` is assignable to the property | `.DeepClone()` |
 | Array | `Array.Clone()` |
 | `List<T>` | `new List<T>(original)` |
 | Other reference | Shallow (with `[ShallowClone]`) |
@@ -343,5 +343,4 @@ svc.Count = 5;
 Assert.Equal("Hello-5", svc.GetMessage());
 ```
 
-The generator will not emit a member if the containing type already defines it, allowing manual overrides.
-
+The members of the interfaces of the member type (or `InterfaceType` and its base interfaces) are forwarded: methods, properties, indexers and events, with their generic constraints, parameter modifiers, default values and nullable annotations.
