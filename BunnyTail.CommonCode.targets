@@ -9,22 +9,36 @@
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringTypeName" />
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringTypeArgument" />
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringNull" />
-    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringNullLiteral" />
+    <CompilerVisibleProperty Include="_CommonCodeGeneratorToStringNullLiteral" />
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringCollection" />
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringCollectionLimit" />
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringMembers" />
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringBracket" />
-    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringOpenBracket" />
-    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringCloseBracket" />
+    <CompilerVisibleProperty Include="_CommonCodeGeneratorToStringOpenBracket" />
+    <CompilerVisibleProperty Include="_CommonCodeGeneratorToStringCloseBracket" />
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringInnerSpace" />
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringTypeNameSpace" />
-    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringSeparator" />
-    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringAssign" />
+    <CompilerVisibleProperty Include="_CommonCodeGeneratorToStringSeparator" />
+    <CompilerVisibleProperty Include="_CommonCodeGeneratorToStringAssign" />
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringCollectionBracket" />
-    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringCollectionOpenBracket" />
-    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringCollectionCloseBracket" />
+    <CompilerVisibleProperty Include="_CommonCodeGeneratorToStringCollectionOpenBracket" />
+    <CompilerVisibleProperty Include="_CommonCodeGeneratorToStringCollectionCloseBracket" />
     <CompilerVisibleProperty Include="CommonCodeGeneratorToStringCollectionInnerSpace" />
-    <CompilerVisibleProperty Include="CommonCodeGeneratorToStringCollectionSeparator" />
+    <CompilerVisibleProperty Include="_CommonCodeGeneratorToStringCollectionSeparator" />
   </ItemGroup>
+
+  <Target Name="ComputeCommonCodeGeneratorToStringValues"
+          BeforeTargets="GenerateMSBuildEditorConfigFileShouldRun">
+    <PropertyGroup>
+      <_CommonCodeGeneratorToStringNullLiteral>$(CommonCodeGeneratorToStringNullLiteral.Replace('%', '%2525').Replace('#', '%2523').Replace(';', '%253B').Replace('%0D', '%250D').Replace('%0A', '%250A'))</_CommonCodeGeneratorToStringNullLiteral>
+      <_CommonCodeGeneratorToStringOpenBracket>$(CommonCodeGeneratorToStringOpenBracket.Replace('%', '%2525').Replace('#', '%2523').Replace(';', '%253B').Replace('%0D', '%250D').Replace('%0A', '%250A'))</_CommonCodeGeneratorToStringOpenBracket>
+      <_CommonCodeGeneratorToStringCloseBracket>$(CommonCodeGeneratorToStringCloseBracket.Replace('%', '%2525').Replace('#', '%2523').Replace(';', '%253B').Replace('%0D', '%250D').Replace('%0A', '%250A'))</_CommonCodeGeneratorToStringCloseBracket>
+      <_CommonCodeGeneratorToStringSeparator>$(CommonCodeGeneratorToStringSeparator.Replace('%', '%2525').Replace('#', '%2523').Replace(';', '%253B').Replace('%0D', '%250D').Replace('%0A', '%250A'))</_CommonCodeGeneratorToStringSeparator>
+      <_CommonCodeGeneratorToStringAssign>$(CommonCodeGeneratorToStringAssign.Replace('%', '%2525').Replace('#', '%2523').Replace(';', '%253B').Replace('%0D', '%250D').Replace('%0A', '%250A'))</_CommonCodeGeneratorToStringAssign>
+      <_CommonCodeGeneratorToStringCollectionOpenBracket>$(CommonCodeGeneratorToStringCollectionOpenBracket.Replace('%', '%2525').Replace('#', '%2523').Replace(';', '%253B').Replace('%0D', '%250D').Replace('%0A', '%250A'))</_CommonCodeGeneratorToStringCollectionOpenBracket>
+      <_CommonCodeGeneratorToStringCollectionCloseBracket>$(CommonCodeGeneratorToStringCollectionCloseBracket.Replace('%', '%2525').Replace('#', '%2523').Replace(';', '%253B').Replace('%0D', '%250D').Replace('%0A', '%250A'))</_CommonCodeGeneratorToStringCollectionCloseBracket>
+      <_CommonCodeGeneratorToStringCollectionSeparator>$(CommonCodeGeneratorToStringCollectionSeparator.Replace('%', '%2525').Replace('#', '%2523').Replace(';', '%253B').Replace('%0D', '%250D').Replace('%0A', '%250A'))</_CommonCodeGeneratorToStringCollectionSeparator>
+    </PropertyGroup>
+  </Target>
 
 </Project>

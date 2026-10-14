@@ -28,40 +28,8 @@ internal static class Diagnostics
         isEnabledByDefault: true,
         customTags: DiagnosticTags.NotSuppressible);
 
-    public static DiagnosticDescriptor ToStringFormatOnIgnored { get; } = new(
-        id: "BTCC0102",
-        title: "ToStringFormat on an ignored member",
-        messageFormat: "Member is excluded by [IgnoreToString]. member=[{0}]",
-        category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Warning,
-        isEnabledByDefault: true);
-
-    public static DiagnosticDescriptor ToStringMaskConflict { get; } = new(
-        id: "BTCC0103",
-        title: "Conflicting mask settings",
-        messageFormat: "MaskChar is overridden by MaskPattern. member=[{0}]",
-        category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Warning,
-        isEnabledByDefault: true);
-
-    public static DiagnosticDescriptor ToStringFormatNoEffect { get; } = new(
-        id: "BTCC0104",
-        title: "ToStringFormat has no effect",
-        messageFormat: "[ToStringFormat] has no effective setting. member=[{0}]",
-        category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Warning,
-        isEnabledByDefault: true);
-
-    public static DiagnosticDescriptor InvalidPropertyValue { get; } = new(
-        id: "BTCC0105",
-        title: "Invalid MSBuild property value",
-        messageFormat: "MSBuild property value is not valid, and the default is used. property=[{0}], value=[{1}]",
-        category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Warning,
-        isEnabledByDefault: true);
-
     public static DiagnosticDescriptor ToStringSealed { get; } = new(
-        id: "BTCC0106",
+        id: "BTCC0102",
         title: "ToString sealed in a base type",
         messageFormat: "ToString is sealed in a base type, and cannot be generated. type=[{0}], base=[{1}]",
         category: "Usage",
@@ -70,13 +38,45 @@ internal static class Diagnostics
         customTags: DiagnosticTags.NotSuppressible);
 
     public static DiagnosticDescriptor ToStringRefStructMember { get; } = new(
-        id: "BTCC0107",
+        id: "BTCC0103",
         title: "Member of a ref struct type",
         messageFormat: "Member of a ref struct type cannot be written, exclude it with [IgnoreToString]. member=[{0}], type=[{1}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         customTags: DiagnosticTags.NotSuppressible);
+
+    public static DiagnosticDescriptor InvalidPropertyValue { get; } = new(
+        id: "BTCC0104",
+        title: "Invalid MSBuild property value",
+        messageFormat: "MSBuild property value is not valid, and the default is used. property=[{0}], value=[{1}]",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    public static DiagnosticDescriptor ToStringFormatOnIgnored { get; } = new(
+        id: "BTCC0105",
+        title: "ToStringFormat on an ignored member",
+        messageFormat: "Member is excluded by [IgnoreToString]. member=[{0}]",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    public static DiagnosticDescriptor ToStringMaskConflict { get; } = new(
+        id: "BTCC0106",
+        title: "Conflicting mask settings",
+        messageFormat: "MaskChar is overridden by MaskPattern. member=[{0}]",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    public static DiagnosticDescriptor ToStringFormatNoEffect { get; } = new(
+        id: "BTCC0107",
+        title: "ToStringFormat has no effect",
+        messageFormat: "[ToStringFormat] has no effective setting. member=[{0}]",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 
     // Equality (02xx)
 
@@ -89,19 +89,19 @@ internal static class Diagnostics
         isEnabledByDefault: true,
         customTags: DiagnosticTags.NotSuppressible);
 
-    public static DiagnosticDescriptor EqualityNoProperties { get; } = new(
+    public static DiagnosticDescriptor EqualityRefStructMember { get; } = new(
         id: "BTCC0202",
-        title: "No equality properties found",
-        messageFormat: "No public properties for equality. type=[{0}]",
+        title: "Property of a ref struct type",
+        messageFormat: "Property of a ref struct type cannot be compared, exclude it with [IgnoreEquality]. property=[{0}], type=[{1}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         customTags: DiagnosticTags.NotSuppressible);
 
-    public static DiagnosticDescriptor EqualityRefStructMember { get; } = new(
+    public static DiagnosticDescriptor EqualityNoProperties { get; } = new(
         id: "BTCC0203",
-        title: "Property of a ref struct type",
-        messageFormat: "Property of a ref struct type cannot be compared, exclude it with [IgnoreEquality]. property=[{0}], type=[{1}]",
+        title: "No equality properties found",
+        messageFormat: "No public properties for equality. type=[{0}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
@@ -118,8 +118,17 @@ internal static class Diagnostics
         isEnabledByDefault: true,
         customTags: DiagnosticTags.NotSuppressible);
 
-    public static DiagnosticDescriptor DeepCloneNotImplementIDeepCloneable { get; } = new(
+    public static DiagnosticDescriptor DeepCloneRefStruct { get; } = new(
         id: "BTCC0302",
+        title: "GenerateDeepClone on a ref struct",
+        messageFormat: "[GenerateDeepClone] cannot be used on a ref struct. type=[{0}]",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        customTags: DiagnosticTags.NotSuppressible);
+
+    public static DiagnosticDescriptor DeepCloneNotImplementIDeepCloneable { get; } = new(
+        id: "BTCC0303",
         title: "Type does not implement IDeepCloneable",
         messageFormat: "[GenerateDeepClone] type must implement IDeepCloneable<T>. type=[{0}]",
         category: "Usage",
@@ -128,21 +137,12 @@ internal static class Diagnostics
         customTags: DiagnosticTags.NotSuppressible);
 
     public static DiagnosticDescriptor DeepClonePropertyMissingDeepClone { get; } = new(
-        id: "BTCC0303",
+        id: "BTCC0304",
         title: "Property type is not deep cloneable",
         messageFormat: "Property type is not IDeepCloneable<T>. property=[{0}], type=[{1}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
-
-    public static DiagnosticDescriptor DeepCloneRefStruct { get; } = new(
-        id: "BTCC0304",
-        title: "GenerateDeepClone on a ref struct",
-        messageFormat: "[GenerateDeepClone] cannot be used on a ref struct. type=[{0}]",
-        category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true,
-        customTags: DiagnosticTags.NotSuppressible);
 
     // DelegateTo (04xx)
 
@@ -155,19 +155,19 @@ internal static class Diagnostics
         isEnabledByDefault: true,
         customTags: DiagnosticTags.NotSuppressible);
 
-    public static DiagnosticDescriptor DelegateToNoDelegateField { get; } = new(
+    public static DiagnosticDescriptor DelegateToInvalidInterfaceType { get; } = new(
         id: "BTCC0402",
-        title: "No [DelegateTo] field or property found",
-        messageFormat: "No member has [DelegateTo]. type=[{0}]",
+        title: "Invalid InterfaceType for [DelegateTo]",
+        messageFormat: "[DelegateTo] InterfaceType is not implemented. member=[{0}], interfaceType=[{1}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         customTags: DiagnosticTags.NotSuppressible);
 
-    public static DiagnosticDescriptor DelegateToInvalidInterfaceType { get; } = new(
+    public static DiagnosticDescriptor DelegateToNoDelegateField { get; } = new(
         id: "BTCC0403",
-        title: "Invalid InterfaceType for [DelegateTo]",
-        messageFormat: "[DelegateTo] InterfaceType is not implemented. member=[{0}], interfaceType=[{1}]",
+        title: "No [DelegateTo] field or property found",
+        messageFormat: "No member has [DelegateTo]. type=[{0}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
@@ -184,19 +184,19 @@ internal static class Diagnostics
         isEnabledByDefault: true,
         customTags: DiagnosticTags.NotSuppressible);
 
-    public static DiagnosticDescriptor CompareToNoKeys { get; } = new(
+    public static DiagnosticDescriptor CompareToKeyNotComparable { get; } = new(
         id: "BTCC0502",
-        title: "No [CompareKey] properties found",
-        messageFormat: "No property has [CompareKey]. type=[{0}]",
+        title: "Key type not comparable",
+        messageFormat: "Key type implements neither IComparable<T> nor IComparable, or is a ref struct, and cannot be compared. member=[{0}], type=[{1}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         customTags: DiagnosticTags.NotSuppressible);
 
-    public static DiagnosticDescriptor CompareToKeyNotComparable { get; } = new(
+    public static DiagnosticDescriptor CompareToNoKeys { get; } = new(
         id: "BTCC0503",
-        title: "Key type not comparable",
-        messageFormat: "Key type implements neither IComparable<T> nor IComparable, or is a ref struct, and cannot be compared. member=[{0}], type=[{1}]",
+        title: "No [CompareKey] properties found",
+        messageFormat: "No property has [CompareKey]. type=[{0}]",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,

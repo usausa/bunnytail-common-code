@@ -484,7 +484,7 @@ public class GeneratedCodeTests
         var problems = GeneratorTestHelper.GetProblemIds(source);
 
         // Assert
-        Assert.Equal(["BTCC0303"], problems);
+        Assert.Equal(["BTCC0304"], problems);
     }
 
     // ------------------------------------------------------------

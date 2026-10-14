@@ -10,505 +10,7 @@ using Microsoft.CodeAnalysis;
 public class DiagnosticTests
 {
     // ------------------------------------------------------------
-    // ToStringFormat
-    // ------------------------------------------------------------
-
-    [Fact]
-    public void Btcc0103MaskCharAndMaskPatternEmitsDiagnostic()
-    {
-        // Arrange
-        const string source =
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateToString]
-            public partial class Data
-            {
-                [ToStringFormat(MaskChar = '*', MaskPattern = "###")]
-                public string? Name { get; set; }
-            }
-            """;
-
-        // Act
-        var diagnostics = GeneratorTestHelper.GetDiagnostics<ToStringGenerator>(source);
-
-        // Assert
-        Assert.Contains(diagnostics, static x => x.Id == "BTCC0103");
-    }
-
-    [Fact]
-    public void Btcc0104NoEffectiveSettingEmitsDiagnostic()
-    {
-        // Arrange
-        const string source =
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateToString]
-            public partial class Data
-            {
-                [ToStringFormat]
-                public string? Name { get; set; }
-            }
-            """;
-
-        // Act
-        var diagnostics = GeneratorTestHelper.GetDiagnostics<ToStringGenerator>(source);
-
-        // Assert
-        Assert.Contains(diagnostics, static x => x.Id == "BTCC0104");
-    }
-
-    // ------------------------------------------------------------
-    // DeepClone target
-    // ------------------------------------------------------------
-
-    [Fact]
-    public void Btcc0302NotImplementIDeepCloneableEmitsDiagnostic()
-    {
-        // Arrange
-        const string source =
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateDeepClone]
-            public partial class Data
-            {
-                public string Name { get; set; } = default!;
-            }
-            """;
-
-        // Act
-        var diagnostics = GeneratorTestHelper.GetDiagnostics<DeepCloneGenerator>(source);
-
-        // Assert
-        Assert.Contains(diagnostics, static x => x.Id == "BTCC0302");
-    }
-
-    // ------------------------------------------------------------
-    // Type
-    // ------------------------------------------------------------
-
-    [Fact]
-    public void Btcc0101NonPartialToStringEmitsDiagnostic()
-    {
-        var diagnostics = GeneratorTestHelper.GetDiagnostics<ToStringGenerator>(
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateToString]
-            public class Data
-            {
-                public int Id { get; set; }
-            }
-            """);
-
-        Assert.Contains(diagnostics, static x => x.Id == "BTCC0101");
-    }
-
-    [Fact]
-    public void Btcc0201NonPartialEqualityEmitsDiagnostic()
-    {
-        var diagnostics = GeneratorTestHelper.GetDiagnostics<EqualityGenerator>(
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateEquality]
-            public class Data
-            {
-                public int Id { get; set; }
-            }
-            """);
-
-        Assert.Contains(diagnostics, static x => x.Id == "BTCC0201");
-    }
-
-    [Fact]
-    public void Btcc0301NonPartialDeepCloneEmitsDiagnostic()
-    {
-        var diagnostics = GeneratorTestHelper.GetDiagnostics<DeepCloneGenerator>(
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateDeepClone]
-            public class Data
-            {
-                public int Id { get; set; }
-            }
-            """);
-
-        Assert.Contains(diagnostics, static x => x.Id == "BTCC0301");
-    }
-
-    [Fact]
-    public void Btcc0401NonPartialDelegateToEmitsDiagnostic()
-    {
-        var diagnostics = GeneratorTestHelper.GetDiagnostics<DelegateToGenerator>(
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            public interface IContract
-            {
-                void Run();
-            }
-
-            [GenerateDelegateTo]
-            public class Data
-            {
-                [DelegateTo]
-                private readonly IContract inner = default!;
-            }
-            """);
-
-        Assert.Contains(diagnostics, static x => x.Id == "BTCC0401");
-    }
-
-    [Fact]
-    public void Btcc0501NonPartialCompareToEmitsDiagnostic()
-    {
-        var diagnostics = GeneratorTestHelper.GetDiagnostics<CompareToGenerator>(
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateCompareTo]
-            public class Data
-            {
-                [CompareKey]
-                public int Id { get; set; }
-            }
-            """);
-
-        Assert.Contains(diagnostics, static x => x.Id == "BTCC0501");
-    }
-
-    // ------------------------------------------------------------
-    // Equality
-    // ------------------------------------------------------------
-
-    [Fact]
-    public void Btcc0202NoPropertyEmitsDiagnostic()
-    {
-        var diagnostics = GeneratorTestHelper.GetDiagnostics<EqualityGenerator>(
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateEquality]
-            public partial class Data
-            {
-            }
-            """);
-
-        Assert.Contains(diagnostics, static x => x.Id == "BTCC0202");
-    }
-
-    // ------------------------------------------------------------
-    // DelegateTo
-    // ------------------------------------------------------------
-
-    [Fact]
-    public void Btcc0402NoDelegateFieldEmitsDiagnostic()
-    {
-        var diagnostics = GeneratorTestHelper.GetDiagnostics<DelegateToGenerator>(
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateDelegateTo]
-            public partial class Data
-            {
-                public int Id { get; set; }
-            }
-            """);
-
-        Assert.Contains(diagnostics, static x => x.Id == "BTCC0402");
-    }
-
-    [Fact]
-    public void Btcc0403InvalidInterfaceTypeEmitsDiagnostic()
-    {
-        var diagnostics = GeneratorTestHelper.GetDiagnostics<DelegateToGenerator>(
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            public interface IContract
-            {
-                void Run();
-            }
-
-            public sealed class NotAnImplementation
-            {
-            }
-
-            [GenerateDelegateTo]
-            public partial class Data
-            {
-                [DelegateTo(InterfaceType = typeof(IContract))]
-                private readonly NotAnImplementation inner = default!;
-            }
-            """);
-
-        var diagnostic = Assert.Single(diagnostics, static x => x.Id == "BTCC0403");
-        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
-    }
-
-    // ------------------------------------------------------------
-    // DeepClone
-    // ------------------------------------------------------------
-
-    [Fact]
-    public void Btcc0303PropertyMissingDeepCloneEmitsDiagnostic()
-    {
-        var diagnostics = GeneratorTestHelper.GetDiagnostics<DeepCloneGenerator>(
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            public sealed class Inner
-            {
-            }
-
-            [GenerateDeepClone]
-            public partial class Data : IDeepCloneable<Data>
-            {
-                public Inner Value { get; set; } = default!;
-            }
-            """);
-
-        Assert.Contains(diagnostics, static x => x.Id == "BTCC0303");
-    }
-
-    // ------------------------------------------------------------
-    // ToString
-    // ------------------------------------------------------------
-
-    [Fact]
-    public void Btcc0102FormatOnIgnoredEmitsDiagnostic()
-    {
-        var diagnostics = GeneratorTestHelper.GetDiagnostics<ToStringGenerator>(
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateToString]
-            public partial class Data
-            {
-                [IgnoreToString]
-                [ToStringFormat("X")]
-                public int Id { get; set; }
-            }
-            """);
-
-        Assert.Contains(diagnostics, static x => x.Id == "BTCC0102");
-    }
-
-    // ------------------------------------------------------------
-    // CompareTo
-    // ------------------------------------------------------------
-
-    [Fact]
-    public void Btcc0502NoCompareKeyEmitsDiagnostic()
-    {
-        var diagnostics = GeneratorTestHelper.GetDiagnostics<CompareToGenerator>(
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateCompareTo]
-            public partial class Data
-            {
-                public int Id { get; set; }
-            }
-            """);
-
-        Assert.Contains(diagnostics, static x => x.Id == "BTCC0502");
-    }
-
-    // ------------------------------------------------------------
-    // ToString
-    // ------------------------------------------------------------
-
-    [Fact]
-    public void ValidToStringEmitsNoDiagnostic()
-    {
-        var diagnostics = GeneratorTestHelper.GetDiagnostics<ToStringGenerator>(
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateToString]
-            public partial class Data
-            {
-                public int Id { get; set; }
-            }
-            """);
-
-        Assert.Empty(diagnostics);
-    }
-
-    [Fact]
-    public void ValidEqualityEmitsNoDiagnostic()
-    {
-        var diagnostics = GeneratorTestHelper.GetDiagnostics<EqualityGenerator>(
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateEquality]
-            public partial class Data
-            {
-                public int Id { get; set; }
-            }
-            """);
-
-        Assert.Empty(diagnostics);
-    }
-
-    [Fact]
-    public void ValidCompareToGeneratesSource()
-    {
-        var generated = GeneratorTestHelper.GetGeneratedSource<CompareToGenerator>(
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateCompareTo]
-            public partial class Data
-            {
-                [CompareKey]
-                public int Id { get; set; }
-            }
-            """);
-
-        Assert.Contains("CompareTo", generated, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ValidEqualityProducesNoCompilationError()
-    {
-        var diagnostics = GeneratorTestHelper.GetDiagnosticsAll<EqualityGenerator>(
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateEquality]
-            public partial class Data
-            {
-                public int Id { get; set; }
-            }
-            """);
-
-        Assert.DoesNotContain(diagnostics, static x => x.Severity == DiagnosticSeverity.Error);
-    }
-
-    [Fact]
-    public void Abcd1234MaskPatternEmitsDiagnostic()
-    {
-        // Arrange
-        var masked = new ToStringMaskPatternData
-        {
-            Password = "secret",
-            Secret = "topsecret",
-            Token = "abcd1234",
-            Card = "4111111111111111"
-        };
-        var shortValue = new ToStringMaskPatternData
-        {
-            Password = "x",
-            Secret = "y",
-            Token = "ab",
-            Card = "41111111"
-        };
-        var nullValue = new ToStringMaskPatternData();
-
-        // Act
-        var maskedText = masked.ToString();
-        var shortText = shortValue.ToString();
-        var nullText = nullValue.ToString();
-
-        // Assert
-        // A leading or trailing run of # keeps that many original characters visible
-        Assert.Equal("ToStringMaskPatternData { Password = ***, Secret = [REDACTED], Token = ***34, Card = 4111****1111 }", maskedText);
-        // A value not longer than the kept length is written as the mask text only
-        Assert.Equal("ToStringMaskPatternData { Password = ***, Secret = [REDACTED], Token = ***, Card = **** }", shortText);
-        // null is not masked and follows the null setting
-        Assert.Equal("ToStringMaskPatternData { Password = null, Secret = null, Token = null, Card = null }", nullText);
-    }
-
-    // ------------------------------------------------------------
-    // Reporting
-    // ------------------------------------------------------------
-
-    [Fact]
-    public void DiagnosticIsReportedInSource()
-    {
-        // Arrange
-        const string source =
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateToString]
-            public class Data
-            {
-                public int Id { get; set; }
-            }
-            """;
-
-        // Act
-        var diagnostics = GeneratorTestHelper.GetDiagnostics<ToStringGenerator>(source);
-
-        // Assert
-        var diagnostic = Assert.Single(diagnostics, static x => x.Id == "BTCC0101");
-        Assert.True(diagnostic.Location.IsInSource);
-    }
-
-    [Fact]
-    public void ErrorsCannotBeSuppressed()
-    {
-        // Arrange
-        var descriptors = typeof(ToStringGenerator).Assembly.GetType("BunnyTail.CommonCode.Generator.Diagnostics", throwOnError: true)!
-            .GetProperties(BindingFlags.Public | BindingFlags.Static)
-            .Where(static x => x.PropertyType == typeof(DiagnosticDescriptor))
-            .Select(static x => (DiagnosticDescriptor)x.GetValue(null)!)
-            .ToList();
-
-        // Assert
-        Assert.All(
-            descriptors.Where(static x => x.DefaultSeverity == DiagnosticSeverity.Error),
-            static x => Assert.Equal([WellKnownDiagnosticTags.NotConfigurable, WellKnownDiagnosticTags.Compiler], x.CustomTags));
-    }
-
-    // ------------------------------------------------------------
-    // Type
+    // Common (00xx)
     // ------------------------------------------------------------
 
     [Fact]
@@ -576,6 +78,29 @@ public class DiagnosticTests
         Assert.Single(result.GeneratedSources);
     }
 
+    // ------------------------------------------------------------
+    // ToString (01xx)
+    // ------------------------------------------------------------
+
+    [Fact]
+    public void Btcc0101NonPartialToStringEmitsDiagnostic()
+    {
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<ToStringGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateToString]
+            public class Data
+            {
+                public int Id { get; set; }
+            }
+            """);
+
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0101");
+    }
+
     [Fact]
     public void Btcc0101TypeInNonPartialTypeEmitsDiagnostic()
     {
@@ -617,71 +142,8 @@ public class DiagnosticTests
         Assert.Equal(["BTCC0101"], problems);
     }
 
-    // ------------------------------------------------------------
-    // ToString option
-    // ------------------------------------------------------------
-
-    [Theory]
-    [InlineData("CommonCodeGeneratorToStringTypeName", "Short")]
-    [InlineData("CommonCodeGeneratorToStringTypeName", "5")]
-    [InlineData("CommonCodeGeneratorToStringCollectionLimit", "many")]
-    [InlineData("CommonCodeGeneratorToStringSkipLocalsInit", "yes")]
-    public void Btcc0105InvalidOptionValueEmitsDiagnostic(string name, string value)
-    {
-        // Arrange
-        const string source =
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateToString]
-            public partial class Data
-            {
-                public int Id { get; set; }
-            }
-            """;
-
-        // Act
-        var result = GeneratorTestHelper.RunWithOption<ToStringGenerator>(name, value, source);
-
-        // Assert
-        var diagnostic = Assert.Single(result.Problems);
-        Assert.Equal("BTCC0105", diagnostic.Id);
-        Assert.Contains($"property=[{name}], value=[{value}]", diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal);
-        Assert.Contains("\"Data { Id = \"", result.AllGeneratedText, StringComparison.Ordinal);
-    }
-
     [Fact]
-    public void EmptyOptionValueIsNotReported()
-    {
-        // Arrange
-        const string source =
-            """
-            using BunnyTail.CommonCode;
-
-            namespace Test;
-
-            [GenerateToString]
-            public partial class Data
-            {
-                public int Id { get; set; }
-            }
-            """;
-
-        // Act
-        var result = GeneratorTestHelper.RunWithOption<ToStringGenerator>("CommonCodeGeneratorToStringTypeName", string.Empty, source);
-
-        // Assert
-        Assert.Empty(result.Problems);
-    }
-
-    // ------------------------------------------------------------
-    // ToString target
-    // ------------------------------------------------------------
-
-    [Fact]
-    public void Btcc0106SealedBaseToStringEmitsDiagnostic()
+    public void Btcc0102SealedBaseToStringEmitsDiagnostic()
     {
         var problems = GeneratorTestHelper.GetProblemIds(
             """
@@ -705,11 +167,11 @@ public class DiagnosticTests
             }
             """);
 
-        Assert.Equal(["BTCC0106"], problems);
+        Assert.Equal(["BTCC0102"], problems);
     }
 
     [Fact]
-    public void Btcc0106SealedBaseRecordToStringEmitsDiagnostic()
+    public void Btcc0102SealedBaseRecordToStringEmitsDiagnostic()
     {
         var problems = GeneratorTestHelper.GetProblemIds(
             """
@@ -729,11 +191,11 @@ public class DiagnosticTests
             }
             """);
 
-        Assert.Equal(["BTCC0106"], problems);
+        Assert.Equal(["BTCC0102"], problems);
     }
 
     [Fact]
-    public void Btcc0107RefStructMemberEmitsDiagnostic()
+    public void Btcc0103RefStructMemberEmitsDiagnostic()
     {
         // Arrange
         const string source =
@@ -760,7 +222,7 @@ public class DiagnosticTests
 
         // Assert
         var diagnostic = Assert.Single(result.Problems);
-        Assert.Equal("BTCC0107", diagnostic.Id);
+        Assert.Equal("BTCC0103", diagnostic.Id);
         Assert.Contains("member=[Values]", diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal);
         Assert.DoesNotContain("this.Values", result.AllGeneratedText, StringComparison.Ordinal);
     }
@@ -792,15 +254,240 @@ public class DiagnosticTests
 
         // Assert
         Assert.Empty(propertyOnly.Problems);
-        Assert.Equal(["BTCC0107"], withField.Problems.Select(static x => x.Id));
+        Assert.Equal(["BTCC0103"], withField.Problems.Select(static x => x.Id));
+    }
+
+    [Theory]
+    [InlineData("CommonCodeGeneratorToStringTypeName", "Short")]
+    [InlineData("CommonCodeGeneratorToStringTypeName", "5")]
+    [InlineData("CommonCodeGeneratorToStringCollectionLimit", "many")]
+    [InlineData("CommonCodeGeneratorToStringSkipLocalsInit", "yes")]
+    public void Btcc0104InvalidOptionValueEmitsDiagnostic(string name, string value)
+    {
+        // Arrange
+        const string source =
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateToString]
+            public partial class Data
+            {
+                public int Id { get; set; }
+            }
+            """;
+
+        // Act
+        var result = GeneratorTestHelper.RunWithOption<ToStringGenerator>(name, value, source);
+
+        // Assert
+        var diagnostic = Assert.Single(result.Problems);
+        Assert.Equal("BTCC0104", diagnostic.Id);
+        Assert.Contains($"property=[{name}], value=[{value}]", diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        Assert.Contains("\"Data { Id = \"", result.AllGeneratedText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EmptyOptionValueIsNotReported()
+    {
+        // Arrange
+        const string source =
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateToString]
+            public partial class Data
+            {
+                public int Id { get; set; }
+            }
+            """;
+
+        // Act
+        var result = GeneratorTestHelper.RunWithOption<ToStringGenerator>("CommonCodeGeneratorToStringTypeName", string.Empty, source);
+
+        // Assert
+        Assert.Empty(result.Problems);
+    }
+
+    [Fact]
+    public void EscapedStringOptionIsUnescaped()
+    {
+        // Arrange
+        const string source =
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateToString]
+            public partial class Data
+            {
+                public int Id { get; set; }
+
+                public string Name { get; set; } = string.Empty;
+            }
+            """;
+
+        // Act
+        var result = GeneratorTestHelper.RunWithOption<ToStringGenerator>("_CommonCodeGeneratorToStringSeparator", "\"%23%3B \"", source);
+
+        // Assert
+        Assert.Empty(result.Problems);
+        Assert.Contains("#; Name = ", result.AllGeneratedText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Btcc0105FormatOnIgnoredEmitsDiagnostic()
+    {
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<ToStringGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateToString]
+            public partial class Data
+            {
+                [IgnoreToString]
+                [ToStringFormat("X")]
+                public int Id { get; set; }
+            }
+            """);
+
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0105");
+    }
+
+    [Fact]
+    public void Btcc0106MaskCharAndMaskPatternEmitsDiagnostic()
+    {
+        // Arrange
+        const string source =
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateToString]
+            public partial class Data
+            {
+                [ToStringFormat(MaskChar = '*', MaskPattern = "###")]
+                public string? Name { get; set; }
+            }
+            """;
+
+        // Act
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<ToStringGenerator>(source);
+
+        // Assert
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0106");
+    }
+
+    [Fact]
+    public void Btcc0107NoEffectiveSettingEmitsDiagnostic()
+    {
+        // Arrange
+        const string source =
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateToString]
+            public partial class Data
+            {
+                [ToStringFormat]
+                public string? Name { get; set; }
+            }
+            """;
+
+        // Act
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<ToStringGenerator>(source);
+
+        // Assert
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0107");
+    }
+
+    [Fact]
+    public void ValidToStringEmitsNoDiagnostic()
+    {
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<ToStringGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateToString]
+            public partial class Data
+            {
+                public int Id { get; set; }
+            }
+            """);
+
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void Abcd1234MaskPatternEmitsDiagnostic()
+    {
+        // Arrange
+        var masked = new ToStringMaskPatternData
+        {
+            Password = "secret",
+            Secret = "topsecret",
+            Token = "abcd1234",
+            Card = "4111111111111111"
+        };
+        var shortValue = new ToStringMaskPatternData
+        {
+            Password = "x",
+            Secret = "y",
+            Token = "ab",
+            Card = "41111111"
+        };
+        var nullValue = new ToStringMaskPatternData();
+
+        // Act
+        var maskedText = masked.ToString();
+        var shortText = shortValue.ToString();
+        var nullText = nullValue.ToString();
+
+        // Assert
+        // A leading or trailing run of # keeps that many original characters visible
+        Assert.Equal("ToStringMaskPatternData { Password = ***, Secret = [REDACTED], Token = ***34, Card = 4111****1111 }", maskedText);
+        // A value not longer than the kept length is written as the mask text only
+        Assert.Equal("ToStringMaskPatternData { Password = ***, Secret = [REDACTED], Token = ***, Card = **** }", shortText);
+        // null is not masked and follows the null setting
+        Assert.Equal("ToStringMaskPatternData { Password = null, Secret = null, Token = null, Card = null }", nullText);
     }
 
     // ------------------------------------------------------------
-    // Ref struct
+    // Equality (02xx)
     // ------------------------------------------------------------
 
     [Fact]
-    public void Btcc0203RefStructPropertyEmitsDiagnostic()
+    public void Btcc0201NonPartialEqualityEmitsDiagnostic()
+    {
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<EqualityGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateEquality]
+            public class Data
+            {
+                public int Id { get; set; }
+            }
+            """);
+
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0201");
+    }
+
+    [Fact]
+    public void Btcc0202RefStructPropertyEmitsDiagnostic()
     {
         var problems = GeneratorTestHelper.GetProblemIds(
             """
@@ -819,11 +506,90 @@ public class DiagnosticTests
             }
             """);
 
-        Assert.Equal(["BTCC0203"], problems);
+        Assert.Equal(["BTCC0202"], problems);
     }
 
     [Fact]
-    public void Btcc0304RefStructEmitsDiagnostic()
+    public void Btcc0203NoPropertyEmitsDiagnostic()
+    {
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<EqualityGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateEquality]
+            public partial class Data
+            {
+            }
+            """);
+
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0203");
+    }
+
+    [Fact]
+    public void ValidEqualityEmitsNoDiagnostic()
+    {
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<EqualityGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateEquality]
+            public partial class Data
+            {
+                public int Id { get; set; }
+            }
+            """);
+
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void ValidEqualityProducesNoCompilationError()
+    {
+        var diagnostics = GeneratorTestHelper.GetDiagnosticsAll<EqualityGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateEquality]
+            public partial class Data
+            {
+                public int Id { get; set; }
+            }
+            """);
+
+        Assert.DoesNotContain(diagnostics, static x => x.Severity == DiagnosticSeverity.Error);
+    }
+
+    // ------------------------------------------------------------
+    // DeepClone (03xx)
+    // ------------------------------------------------------------
+
+    [Fact]
+    public void Btcc0301NonPartialDeepCloneEmitsDiagnostic()
+    {
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<DeepCloneGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateDeepClone]
+            public class Data
+            {
+                public int Id { get; set; }
+            }
+            """);
+
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0301");
+    }
+
+    [Fact]
+    public void Btcc0302RefStructEmitsDiagnostic()
     {
         var problems = GeneratorTestHelper.GetProblemIds(
             """
@@ -838,15 +604,160 @@ public class DiagnosticTests
             }
             """);
 
-        Assert.Equal(["BTCC0304"], problems);
+        Assert.Equal(["BTCC0302"], problems);
+    }
+
+    [Fact]
+    public void Btcc0303NotImplementIDeepCloneableEmitsDiagnostic()
+    {
+        // Arrange
+        const string source =
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateDeepClone]
+            public partial class Data
+            {
+                public string Name { get; set; } = default!;
+            }
+            """;
+
+        // Act
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<DeepCloneGenerator>(source);
+
+        // Assert
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0303");
+    }
+
+    [Fact]
+    public void Btcc0304PropertyMissingDeepCloneEmitsDiagnostic()
+    {
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<DeepCloneGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            public sealed class Inner
+            {
+            }
+
+            [GenerateDeepClone]
+            public partial class Data : IDeepCloneable<Data>
+            {
+                public Inner Value { get; set; } = default!;
+            }
+            """);
+
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0304");
     }
 
     // ------------------------------------------------------------
-    // CompareTo key
+    // DelegateTo (04xx)
     // ------------------------------------------------------------
 
     [Fact]
-    public void Btcc0503KeyNotComparableEmitsDiagnostic()
+    public void Btcc0401NonPartialDelegateToEmitsDiagnostic()
+    {
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<DelegateToGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            public interface IContract
+            {
+                void Run();
+            }
+
+            [GenerateDelegateTo]
+            public class Data
+            {
+                [DelegateTo]
+                private readonly IContract inner = default!;
+            }
+            """);
+
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0401");
+    }
+
+    [Fact]
+    public void Btcc0402InvalidInterfaceTypeEmitsDiagnostic()
+    {
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<DelegateToGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            public interface IContract
+            {
+                void Run();
+            }
+
+            public sealed class NotAnImplementation
+            {
+            }
+
+            [GenerateDelegateTo]
+            public partial class Data
+            {
+                [DelegateTo(InterfaceType = typeof(IContract))]
+                private readonly NotAnImplementation inner = default!;
+            }
+            """);
+
+        var diagnostic = Assert.Single(diagnostics, static x => x.Id == "BTCC0402");
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+    }
+
+    [Fact]
+    public void Btcc0403NoDelegateFieldEmitsDiagnostic()
+    {
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<DelegateToGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateDelegateTo]
+            public partial class Data
+            {
+                public int Id { get; set; }
+            }
+            """);
+
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0403");
+    }
+
+    // ------------------------------------------------------------
+    // CompareTo (05xx)
+    // ------------------------------------------------------------
+
+    [Fact]
+    public void Btcc0501NonPartialCompareToEmitsDiagnostic()
+    {
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<CompareToGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateCompareTo]
+            public class Data
+            {
+                [CompareKey]
+                public int Id { get; set; }
+            }
+            """);
+
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0501");
+    }
+
+    [Fact]
+    public void Btcc0502KeyNotComparableEmitsDiagnostic()
     {
         // Arrange
         const string source =
@@ -920,10 +831,94 @@ public class DiagnosticTests
 
         // Assert
         Assert.Equal(4, result.Problems.Count);
-        Assert.All(result.Problems, static x => Assert.Equal("BTCC0503", x.Id));
+        Assert.All(result.Problems, static x => Assert.Equal("BTCC0502", x.Id));
         foreach (var name in new[] { "Struct", "Sealed", "Array", "Pair" })
         {
             Assert.Contains(result.Problems, x => x.GetMessage(CultureInfo.InvariantCulture).Contains($"member=[{name}]", StringComparison.Ordinal));
         }
+    }
+
+    [Fact]
+    public void Btcc0503NoCompareKeyEmitsDiagnostic()
+    {
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<CompareToGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateCompareTo]
+            public partial class Data
+            {
+                public int Id { get; set; }
+            }
+            """);
+
+        Assert.Contains(diagnostics, static x => x.Id == "BTCC0503");
+    }
+
+    [Fact]
+    public void ValidCompareToGeneratesSource()
+    {
+        var generated = GeneratorTestHelper.GetGeneratedSource<CompareToGenerator>(
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateCompareTo]
+            public partial class Data
+            {
+                [CompareKey]
+                public int Id { get; set; }
+            }
+            """);
+
+        Assert.Contains("CompareTo", generated, StringComparison.Ordinal);
+    }
+
+    // ------------------------------------------------------------
+    // Reporting
+    // ------------------------------------------------------------
+
+    [Fact]
+    public void DiagnosticIsReportedInSource()
+    {
+        // Arrange
+        const string source =
+            """
+            using BunnyTail.CommonCode;
+
+            namespace Test;
+
+            [GenerateToString]
+            public class Data
+            {
+                public int Id { get; set; }
+            }
+            """;
+
+        // Act
+        var diagnostics = GeneratorTestHelper.GetDiagnostics<ToStringGenerator>(source);
+
+        // Assert
+        var diagnostic = Assert.Single(diagnostics, static x => x.Id == "BTCC0101");
+        Assert.True(diagnostic.Location.IsInSource);
+    }
+
+    [Fact]
+    public void ErrorsCannotBeSuppressed()
+    {
+        // Arrange
+        var descriptors = typeof(ToStringGenerator).Assembly.GetType("BunnyTail.CommonCode.Generator.Diagnostics", throwOnError: true)!
+            .GetProperties(BindingFlags.Public | BindingFlags.Static)
+            .Where(static x => x.PropertyType == typeof(DiagnosticDescriptor))
+            .Select(static x => (DiagnosticDescriptor)x.GetValue(null)!)
+            .ToList();
+
+        // Assert
+        Assert.All(
+            descriptors.Where(static x => x.DefaultSeverity == DiagnosticSeverity.Error),
+            static x => Assert.Equal([WellKnownDiagnosticTags.NotConfigurable, WellKnownDiagnosticTags.Compiler], x.CustomTags));
     }
 }

@@ -24,6 +24,8 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 
     private const string OptionPrefix = "CommonCodeGeneratorToString";
 
+    private const string EscapedOptionPrefix = "_CommonCodeGeneratorToString";
+
     private const string EllipsisLiteral = "...";
 
     private const char MaskKeepChar = '#';
@@ -200,7 +202,7 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 
     private static string GetStringOption(AnalyzerConfigOptions options, string name, string defaultValue)
     {
-        var value = Unquote(options.GetValue<string?>(OptionPrefix + name));
+        var value = Unquote(Unescape(options.GetValue<string?>(EscapedOptionPrefix + name)));
         return String.IsNullOrEmpty(value) ? defaultValue : value!;
     }
 
@@ -240,6 +242,9 @@ public sealed class ToStringGenerator : IIncrementalGenerator
 
     private static void AddInvalidValue(List<DiagnosticInfo> diagnostics, string name, string value) =>
         diagnostics.Add(new DiagnosticInfo(Diagnostics.InvalidPropertyValue, (Location?)null, OptionPrefix + name, value));
+
+    private static string? Unescape(string? value) =>
+        String.IsNullOrEmpty(value) ? value : Uri.UnescapeDataString(value);
 
     private static string? Unquote(string? value) =>
         (value is not null) && (value.Length >= 2) && (value[0] == '"') && (value[value.Length - 1] == '"')

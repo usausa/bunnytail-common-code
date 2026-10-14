@@ -68,7 +68,7 @@ The format is configured with MSBuild properties named `CommonCodeGeneratorToStr
 | `CollectionInnerSpace` | `None` / `Space` | `None` |
 | `CollectionSeparator` | any string | `", "` |
 
-Wrap a string value in double quotes to keep surrounding whitespace, which MSBuild otherwise trims. A value containing `;` or `#` cannot be given, because it is read as a comment.
+Wrap a string value in double quotes to keep surrounding whitespace, which MSBuild otherwise trims.
 
 ```xml
 <PropertyGroup>

@@ -22,7 +22,7 @@
   <PropertyGroup>
     <CommonCodeGeneratorToStringTypeName>Full</CommonCodeGeneratorToStringTypeName>
     <CommonCodeGeneratorToStringTypeArgument>None</CommonCodeGeneratorToStringTypeArgument>
-    <CommonCodeGeneratorToStringNullLiteral>&lt;null&gt;</CommonCodeGeneratorToStringNullLiteral>
+    <CommonCodeGeneratorToStringNullLiteral>#null</CommonCodeGeneratorToStringNullLiteral>
     <CommonCodeGeneratorToStringMembers>PropertyAndField</CommonCodeGeneratorToStringMembers>
     <CommonCodeGeneratorToStringBracket>Parenthesis</CommonCodeGeneratorToStringBracket>
     <CommonCodeGeneratorToStringOpenBracket>&lt;&lt;</CommonCodeGeneratorToStringOpenBracket>
@@ -32,7 +32,7 @@
     <CommonCodeGeneratorToStringAssign>:</CommonCodeGeneratorToStringAssign>
     <CommonCodeGeneratorToStringCollectionBracket>Angle</CommonCodeGeneratorToStringCollectionBracket>
     <CommonCodeGeneratorToStringCollectionInnerSpace>Space</CommonCodeGeneratorToStringCollectionInnerSpace>
-    <CommonCodeGeneratorToStringCollectionSeparator>/</CommonCodeGeneratorToStringCollectionSeparator>
+    <CommonCodeGeneratorToStringCollectionSeparator>;</CommonCodeGeneratorToStringCollectionSeparator>
     <CommonCodeGeneratorToStringCollectionLimit>2</CommonCodeGeneratorToStringCollectionLimit>
   </PropertyGroup>
 

@@ -60,7 +60,7 @@ public class ToStringOptionsTests
         // CloseBracket falls back to Bracket=Parenthesis, InnerSpace=None, Assign=:,
         // Separator is quoted in the csproj so that the surrounding spaces are kept,
         // Members=PropertyAndField so Extra is output
-        Assert.Equal("BunnyTail.CommonCode.OptionData<<Id:1 | Name:x | Values:< 1/2 > | Extra:9)", text);
+        Assert.Equal("BunnyTail.CommonCode.OptionData<<Id:1 | Name:x | Values:< 1;2 > | Extra:9)", text);
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class ToStringOptionsTests
         var text = data.ToString();
 
         // Assert
-        Assert.Equal("BunnyTail.CommonCode.OptionData<<Id:1 | Name:<null> | Values:<null> | Extra:9)", text);
+        Assert.Equal("BunnyTail.CommonCode.OptionData<<Id:1 | Name:#null | Values:#null | Extra:9)", text);
     }
 
     [Fact]
@@ -88,9 +88,9 @@ public class ToStringOptionsTests
         var emptyText = empty.ToString();
 
         // Assert
-        Assert.Equal("BunnyTail.CommonCode.OptionData<<Id:0 | Name:<null> | Values:< 1/2/... > | Extra:0)", overText);
+        Assert.Equal("BunnyTail.CommonCode.OptionData<<Id:0 | Name:#null | Values:< 1;2;... > | Extra:0)", overText);
         // The collection inner space is not output for an empty collection
-        Assert.Equal("BunnyTail.CommonCode.OptionData<<Id:0 | Name:<null> | Values:<> | Extra:0)", emptyText);
+        Assert.Equal("BunnyTail.CommonCode.OptionData<<Id:0 | Name:#null | Values:<> | Extra:0)", emptyText);
     }
 
     [Fact]
