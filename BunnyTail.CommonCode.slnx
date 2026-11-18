@@ -9,8 +9,8 @@
     <File Path=".editorconfig" />
     <File Path=".gitattributes" />
     <File Path=".gitignore" />
+    <File Path=".globalconfig" />
     <File Path="AGENTS.md" />
-    <File Path="Analyzers.ruleset" />
     <File Path="BunnyTail.CommonCode.sln.DotSettings" />
     <File Path="BunnyTail.CommonCode.props" />
     <File Path="BunnyTail.CommonCode.targets" />
